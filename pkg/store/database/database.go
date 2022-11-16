@@ -10,7 +10,7 @@ import (
 	"gorm.io/plugin/opentelemetry/tracing"
 )
 
-var dbs map[string]*gorm.DB
+var dbs = make(map[string]*gorm.DB)
 
 const defaultName = "default"
 

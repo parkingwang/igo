@@ -10,7 +10,7 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-var rs map[string]*redis.Client
+var rs = make(map[string]*redis.Client)
 
 const defaultName = "default"
 
