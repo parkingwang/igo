@@ -42,6 +42,7 @@ func RegisterByName(name, dsn string, opts ...Option) error {
 			return err
 		}
 	}
+	dbs[name] = db
 	return nil
 }
 
@@ -93,11 +94,5 @@ func WithConnMaxIdleTime(n time.Duration) Option {
 		}
 		d.SetConnMaxIdleTime(n)
 		return nil
-	}
-}
-
-func WithAutoMigrate(dst ...interface{}) Option {
-	return func(d *gorm.DB) error {
-		return d.AutoMigrate(dst...)
 	}
 }
