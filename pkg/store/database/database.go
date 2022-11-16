@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -45,7 +46,7 @@ func RegisterByName(name, dsn string, opts ...Option) error {
 }
 
 // Get 获取数据库
-func Get(name ...string) *gorm.DB {
+func Get(ctx context.Context, name ...string) *gorm.DB {
 	var n string
 	if len(name) == 0 || name[0] == "" {
 		n = defaultName
@@ -54,7 +55,7 @@ func Get(name ...string) *gorm.DB {
 	}
 	db, ok := dbs[n]
 	if ok {
-		return db
+		return db.WithContext(ctx)
 	}
 	panic(fmt.Sprintf("db %s not registor", n))
 }
