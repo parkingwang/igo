@@ -4,16 +4,41 @@ import (
 	"context"
 	"time"
 
+	"golang.org/x/exp/slog"
 	"gorm.io/gorm/logger"
 )
 
-// emptyLogger 空log
-// 禁用日志输出 日志已经在trace中集成
-type emptyLogger struct{}
+// tracelogger 集成traceid
+type tracelogger struct {
+	lvl logger.LogLevel
+}
 
-func (l *emptyLogger) LogMode(logger.LogLevel) logger.Interface              { return l }
-func (l *emptyLogger) Info(ctx context.Context, s string, v ...interface{})  {}
-func (l *emptyLogger) Warn(ctx context.Context, s string, v ...interface{})  {}
-func (l *emptyLogger) Error(ctx context.Context, s string, v ...interface{}) {}
-func (l *emptyLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+func (l *tracelogger) LogMode(lvl logger.LogLevel) logger.Interface {
+	newlog := *l
+	newlog.lvl = lvl
+	return &newlog
+}
+func (l *tracelogger) Info(ctx context.Context, s string, v ...interface{})  {}
+func (l *tracelogger) Warn(ctx context.Context, s string, v ...interface{})  {}
+func (l *tracelogger) Error(ctx context.Context, s string, v ...interface{}) {}
+func (l *tracelogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+	if l.lvl <= logger.Silent {
+		return
+	}
+	log := slog.FromContext(ctx)
+	sql, rows := fc()
+	dur := time.Since(begin)
+	logattr := []any{
+		slog.String("sql", sql),
+		slog.Int64("rows", rows),
+		slog.Duration("latency", dur),
+	}
+	switch {
+	case err != nil && l.lvl >= logger.Error:
+		log.Error("gorm", err, logattr...)
+	case dur >= time.Millisecond*500 && l.lvl >= logger.Warn:
+		log.Warn("gorm slow sql", logattr...)
+	case l.lvl == logger.Info:
+		log.Info("gorm", logattr...)
+	}
 }

@@ -28,7 +28,7 @@ func RegisterByName(name, dsn string, opts ...Option) error {
 	}
 	db, err := gorm.Open(
 		mysql.Open(dsn),
-		&gorm.Config{Logger: &emptyLogger{}},
+		&gorm.Config{Logger: &tracelogger{}},
 	)
 	if err != nil {
 		return err

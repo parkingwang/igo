@@ -7,7 +7,7 @@ require (
 	go.opentelemetry.io/otel v1.11.1
 	go.opentelemetry.io/otel/sdk v1.11.1
 	go.opentelemetry.io/otel/trace v1.11.1
-	google.golang.org/grpc v1.50.1
+	google.golang.org/grpc v1.51.0
 )
 
 require (
@@ -59,19 +59,19 @@ require (
 	github.com/rabbitmq/amqp091-go v1.5.0
 	github.com/spf13/viper v1.14.0
 	github.com/ugorji/go/codec v1.2.7 // indirect
-	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.36.4
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.36.4
 	go.opentelemetry.io/contrib/propagators/b3 v1.11.1
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.11.1
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.11.1
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.11.1
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
+	golang.org/x/exp v0.0.0-20221114191408-850992195362
 	golang.org/x/net v0.0.0-20221014081412-f15817d10f9b // indirect
 	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/text v0.4.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gorm.io/driver/mysql v1.4.3
-	gorm.io/gorm v1.24.1
+	gorm.io/driver/mysql v1.4.4
+	gorm.io/gorm v1.24.2
 	gorm.io/plugin/opentelemetry v0.1.0
 )

@@ -1,6 +1,10 @@
 package amqp
 
-import "github.com/rabbitmq/amqp091-go"
+import (
+	"github.com/rabbitmq/amqp091-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+)
 
 type Option func(*option)
 
@@ -29,6 +33,12 @@ func WithOnSubMessage(queue string, f MessageHandle) Option {
 	}
 }
 
+func WithOnSubMessageWorkerCount(n int) Option {
+	return func(o *option) {
+		o.messageHandleWorker = n
+	}
+}
+
 func WithQos(prefetchCount, prefetchSize int, global bool) Option {
 	return func(o *option) {
 		o.qos = &qos{prefetchCount, prefetchSize, global}
@@ -44,19 +54,25 @@ func WithOnError(f func(error)) Option {
 type option struct {
 	dsn string
 	// 需要声明的交换机
-	exchanges     []ExchangeOption
-	queues        []QueueOption
-	messageHandle map[string]MessageHandle
-	err           func(error)
-	qos           *qos
+	exchanges           []ExchangeOption
+	queues              []QueueOption
+	messageHandle       map[string]MessageHandle
+	messageHandleWorker int
+	err                 func(error)
+	qos                 *qos
+
+	//
+	tracker trace.Tracer
 }
 
 func defaultOption() *option {
 	return &option{
-		exchanges:     make([]ExchangeOption, 0),
-		queues:        make([]QueueOption, 0),
-		messageHandle: make(map[string]MessageHandle),
-		err:           func(err error) {},
+		exchanges:           make([]ExchangeOption, 0),
+		queues:              make([]QueueOption, 0),
+		messageHandle:       make(map[string]MessageHandle),
+		messageHandleWorker: 1,
+		err:                 func(err error) {},
+		tracker:             otel.GetTracerProvider().Tracer("github.com/parkingwang/igo/pkg/broker/amqp"),
 	}
 }
 

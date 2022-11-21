@@ -7,7 +7,9 @@ import (
 
 	"github.com/rabbitmq/amqp091-go"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Pub struct {
@@ -52,8 +54,8 @@ func (p *Pub) loopHandle(ctx context.Context, s *Session, serr error) {
 			err := s.ch.PublishWithContext(
 				msg.ctx, msg.exchange, msg.key, false, false, msg.data,
 			)
+			msg.errchan <- err
 			if err != nil {
-				msg.errchan <- err
 				if errors.Is(err, amqp091.ErrClosed) {
 					return
 				}
@@ -74,6 +76,12 @@ func (p *Pub) PublishMsg(ctx context.Context, exchange, key string, msg amqp091.
 	if msg.Headers == nil {
 		msg.Headers = make(amqp091.Table)
 	}
+	ctx, span := p.opt.tracker.Start(ctx, "amqp.publish",
+		trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(attribute.String("exchange", exchange)),
+		trace.WithAttributes(attribute.String("routingkey", key)),
+	)
+	defer span.End()
 	tablemap := make(map[string]string)
 	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(tablemap))
 	for k, v := range tablemap {
@@ -93,11 +101,17 @@ func (p *Pub) PublishMsg(ctx context.Context, exchange, key string, msg amqp091.
 	p.msg <- m
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		err := ctx.Err()
+		if err != nil {
+			span.RecordError(err)
+		}
+		return err
 	case err := <-errchan:
+		if err != nil {
+			span.RecordError(err)
+		}
 		return err
 	}
-
 }
 
 func (p *Pub) Publish(ctx context.Context, exchange, key string, data []byte) error {

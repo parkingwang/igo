@@ -9,7 +9,11 @@ import (
 
 	"github.com/rabbitmq/amqp091-go"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/slog"
 )
 
 type Sub struct {
@@ -17,7 +21,7 @@ type Sub struct {
 	opt    *option
 }
 
-func NewSub(opts ...Option) *Sub {
+func NewConsumer(opts ...Option) *Sub {
 	opt := defaultOption()
 	for _, v := range opts {
 		v(opt)
@@ -31,18 +35,31 @@ func NewSub(opts ...Option) *Sub {
 
 func (s *Sub) Handle(queue string, h MessageHandle) {
 	if _, ok := s.handle[queue]; ok {
-		fmt.Println("warn")
+		slog.Warn("handle alreay used", "queue", queue)
 	}
-	s.handle[queue] = h
+	s.handle[queue] = func(ctx context.Context, msg amqp091.Delivery) {
+		ctx, span := s.opt.tracker.Start(ctx, "amqp.consumer",
+			trace.WithSpanKind(trace.SpanKindConsumer),
+			trace.WithAttributes(attribute.String("queue", queue)),
+		)
+		logger := slog.With(slog.String("traceid", span.SpanContext().TraceID().String()))
+		defer func() {
+			if e := recover(); e != nil {
+				span.SetStatus(codes.Error, fmt.Sprintf("panic %v", e))
+			}
+			span.End()
+		}()
+		h(slog.NewContext(ctx, logger), msg)
+	}
 }
 
-func (s *Sub) Wait(ctx context.Context) error {
+func (s *Sub) Run(ctx context.Context) error {
 	opt := s.opt
 	if opt.dsn == "" {
-
+		return fmt.Errorf("dsn error")
 	}
 	if len(opt.messageHandle) == 0 {
-
+		return fmt.Errorf("messageHandle not found")
 	}
 	clt := &client{dsn: opt.dsn}
 	done := make(chan struct{}, 1)
@@ -70,14 +87,15 @@ func (s *Sub) Wait(ctx context.Context) error {
 				opt.err(err)
 				return
 			}
-			go func(h MessageHandle) {
-				for msg := range msgs {
-					h(fromDelivery(msg), msg)
-				}
-				safeDone()
-			}(handle)
+			for i := 0; i < opt.messageHandleWorker; i++ {
+				go func(h MessageHandle) {
+					for msg := range msgs {
+						h(fromDelivery(msg), msg)
+					}
+					safeDone()
+				}(handle)
+			}
 		}
-
 		select {
 		case <-done:
 		case <-ctx.Done():

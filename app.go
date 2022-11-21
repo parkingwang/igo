@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -20,7 +21,6 @@ import (
 type Application struct {
 	name string
 	opt  *option
-	srvs []core.StartServerfunc
 }
 
 type option struct {
@@ -32,9 +32,6 @@ type option struct {
 type Option func(*option) error
 
 func New(name string, opts ...Option) (*Application, error) {
-	if defaultConfig == nil {
-		return nil, fmt.Errorf("not found config")
-	}
 	opt := &option{
 		shutdownWaitTime: time.Second * 5,
 	}
@@ -43,6 +40,7 @@ func New(name string, opts ...Option) (*Application, error) {
 			return nil, err
 		}
 	}
+
 	if opt.exporter != nil {
 		// enable trace
 		tp, err := newTraceProvider(name, opt.exporter)
@@ -68,44 +66,43 @@ func New(name string, opts ...Option) (*Application, error) {
 }
 
 func autoRegisterStore() error {
-
-	if Conf().IsSet("store.database") {
+	config := core.Conf()
+	if config.IsSet("store.database") {
 		cfg := make(map[string]database.Config)
-		if err := Conf().Decode("store.database", &cfg); err != nil {
+		if err := config.Decode("store.database", &cfg); err != nil {
 			return err
 		}
 		return database.RegisterFromConfig(cfg)
 	}
 
-	if Conf().IsSet("store.redis") {
+	if config.IsSet("store.redis") {
 		cfg := make(map[string]redis.Config)
-		if err := Conf().Decode("store.redis", &cfg); err != nil {
+		if err := config.Decode("store.redis", &cfg); err != nil {
 			return err
 		}
 		return redis.RegisterFromConfig(cfg)
 	}
-
 	return nil
 
 }
 
-// RegisterServer 注册服务
-// 服务需要使用 core.StartServerfunc 函数类型包裹 以便集成优雅停止与重启
-func (app *Application) RegisterServer(s ...core.StartServerfunc) {
-	app.srvs = append(app.srvs, s...)
-}
-
 // Run 开始运行
-func (app *Application) Run() error {
-	if len(app.srvs) == 0 {
+// 服务需要使用 core.StartServerfunc 函数类型包裹 以便集成优雅停止与重启
+func (app *Application) Run(srvs ...core.StartServerfunc) error {
+	if len(srvs) == 0 {
 		return errors.New("not found service")
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
+	// ctx, cancel := context.WithCancel(context.Background())
+	// defer cancel()
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	errChan := make(chan error, 1)
 	defer close(errChan)
 
-	for _, v := range app.srvs {
+	for _, v := range srvs {
 		go func(srv core.StartServerfunc) {
 			if err := srv(ctx); err != nil {
 				errChan <- err
@@ -118,9 +115,15 @@ func (app *Application) Run() error {
 
 	select {
 	case <-quit:
-		cancel()
-		time.Sleep(app.opt.shutdownWaitTime)
-		return ctx.Err()
+		stop()
+		log.Println("shutting down gracefully, press Ctrl+C again to force")
+		select {
+		case <-quit:
+			log.Println("Server forced to shutdown")
+		case <-time.After(app.opt.shutdownWaitTime):
+			log.Println("Server exiting")
+		}
+		return nil
 	case err := <-errChan:
 		return err
 	}
