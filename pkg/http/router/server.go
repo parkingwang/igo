@@ -1,4 +1,4 @@
-package ginserver
+package router
 
 import (
 	"context"
@@ -24,8 +24,8 @@ type Server struct {
 	e   *gin.Engine
 }
 
-func (g *Server) Route() *gin.Engine {
-	return g.e
+func (g *Server) Route(f func(*gin.Engine, Handler)) {
+	f(g.e, handleWarpf(g.opt.render))
 }
 
 func New(opts ...Option) *Server {

@@ -1,4 +1,4 @@
-package ginserver
+package router
 
 import (
 	"net/http"
