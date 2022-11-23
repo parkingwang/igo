@@ -93,14 +93,11 @@ func (app *Application) Run(srvs ...core.StartServerfunc) error {
 		return errors.New("not found service")
 	}
 
-	// ctx, cancel := context.WithCancel(context.Background())
-	// defer cancel()
-
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	errChan := make(chan error, 1)
-	defer close(errChan)
+	// defer close(errChan)
 
 	for _, v := range srvs {
 		go func(srv core.StartServerfunc) {

@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	tr "go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -97,4 +98,13 @@ const defaultTracekName = "github.com/parkingwang/igo/igo/core"
 // TracerStart 快速的开启一次trace记录
 func TracerStart(ctx context.Context, name string) (context.Context, tr.Span) {
 	return otel.GetTracerProvider().Tracer(defaultTracekName).Start(ctx, name)
+}
+
+// LogFromContext 从ctx派生一个log 自动添加traceid
+func LogFromContext(ctx context.Context) *slog.Logger {
+	span := tr.SpanContextFromContext(ctx)
+	if span.IsValid() {
+		return slog.With(slog.String("traceid", span.TraceID().String()))
+	}
+	return slog.Default()
 }

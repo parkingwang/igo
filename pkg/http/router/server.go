@@ -38,6 +38,7 @@ func New(opts ...Option) *Server {
 	}
 	gin.SetMode(gin.ReleaseMode)
 	e := gin.New()
+	e.ContextWithFallback = true
 	e.NoRoute(func(ctx *gin.Context) {
 		opt.render(ctx, nil,
 			code.NewCodeError(
