@@ -35,21 +35,20 @@ func NewConsumer(opts ...Option) *Sub {
 
 func (s *Sub) Handle(queue string, h MessageHandle) {
 	if _, ok := s.handle[queue]; ok {
-		slog.Warn("handle alreay used", "queue", queue)
+		slog.Warn("amqp handle alreay used", "queue", queue)
 	}
 	s.handle[queue] = func(ctx context.Context, msg amqp091.Delivery) {
 		ctx, span := s.opt.tracker.Start(ctx, "amqp.consumer",
 			trace.WithSpanKind(trace.SpanKindConsumer),
 			trace.WithAttributes(attribute.String("queue", queue)),
 		)
-		logger := slog.With(slog.String("traceid", span.SpanContext().TraceID().String()))
 		defer func() {
 			if e := recover(); e != nil {
 				span.SetStatus(codes.Error, fmt.Sprintf("panic %v", e))
 			}
 			span.End()
 		}()
-		h(slog.NewContext(ctx, logger), msg)
+		h(ctx, msg)
 	}
 }
 

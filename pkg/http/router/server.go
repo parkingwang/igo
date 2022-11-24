@@ -25,7 +25,7 @@ type Server struct {
 }
 
 func (g *Server) Route(f func(*gin.Engine, Handler)) {
-	f(g.e, handleWarpf(g.opt.render))
+	f(g.e, handleWarpf(g.opt))
 }
 
 func New(opts ...Option) *Server {
@@ -122,9 +122,9 @@ func WithAddr(addr string) Option {
 
 var errHandleType = errors.New("rpc handle must func(ctx context.Context, in *struct)(out *struct,err error) type")
 
-func checkHandleValid(tp reflect.Type) bool {
+func checkHandleValid(tp reflect.Type) (int, bool) {
 	if tp.Kind() != reflect.Func {
-		return false
+		return 0, false
 	}
 
 	// check request
@@ -132,17 +132,28 @@ func checkHandleValid(tp reflect.Type) bool {
 		rtypeContext.Implements(tp.In(0)) &&
 		tp.In(1).Kind() == reflect.Ptr &&
 		tp.In(1).Elem().Kind() == reflect.Struct) {
-		return false
+		return 0, false
 	}
 
 	// check response
-	return tp.NumOut() == 2 && rtypeError.Implements(tp.Out(1))
+	// 一个返回值的话 必须是error
+	// 两个返回值 最有一个一定是error
+	// 其他都不支持
+	switch n := tp.NumOut(); n {
+	case 1:
+		return 1, rtypeError.Implements(tp.Out(0))
+	case 2:
+		return 2, rtypeError.Implements(tp.Out(1))
+	default:
+		return n, false
+	}
 }
 
-func handleWarpf(r Renderer) Handler {
+func handleWarpf(opt *option) Handler {
 	return func(iface any) gin.HandlerFunc {
 		tp := reflect.TypeOf(iface)
-		if !checkHandleValid(tp) {
+		numOut, ok := checkHandleValid(tp)
+		if !ok {
 			panic(errHandleType)
 		}
 		method := reflect.ValueOf(iface)
@@ -154,33 +165,32 @@ func handleWarpf(r Renderer) Handler {
 			if reqParamsType != rtypEempty {
 				bindq := q.Interface()
 				if err := ctx.ShouldBind(bindq); err != nil {
-					r(ctx, nil, code.NewCodeError(http.StatusBadRequest, err.Error()))
+					opt.render(ctx, nil, code.NewCodeError(http.StatusBadRequest, err.Error()))
 					return
 				}
 				if len(ctx.Params) > 0 {
 					if err := ctx.ShouldBindUri(bindq); err != nil {
-						r(ctx, nil, code.NewCodeError(http.StatusBadRequest, err.Error()))
+						opt.render(ctx, nil, code.NewCodeError(http.StatusBadRequest, err.Error()))
 						return
 					}
 				}
 			}
+			if opt.dumpRequestBody {
+				slog.FromContext(ctx).Info("request dump", slog.Any("data", q))
+			}
 			ret := method.Call([]reflect.Value{reflect.ValueOf(ctx), q})
-			if err := ret[1].Interface(); err != nil {
-				r(ctx, nil, err.(error))
-				return
+			if numOut == 1 {
+				opt.render(ctx, nil, ret[0].Interface().(error))
+			} else {
+				opt.render(ctx, ret[0].Interface(), ret[1].Interface().(error))
 			}
-			switch t := ret[0].Interface().(type) {
-			case Empty:
-			case *Empty:
-			default:
-				r(ctx, t, nil)
-			}
+
 		}
 	}
 }
 
 func middleware(service string, opts ...Option) gin.HandlerFunc {
-	tracer := otel.GetTracerProvider().Tracer("github.com/parkingwang/igo/pkg/ginserver")
+	tracer := otel.GetTracerProvider().Tracer("github.com/parkingwang/igo/pkg/router")
 	txtpropagator := otel.GetTextMapPropagator()
 	return func(c *gin.Context) {
 		savedCtx := c.Request.Context()
@@ -208,8 +218,8 @@ func middleware(service string, opts ...Option) gin.HandlerFunc {
 		ctx, span := tracer.Start(ctx, spanName, opts...)
 		defer span.End()
 
-		logger := slog.With(slog.String("traceid", span.SpanContext().TraceID().String()))
-		c.Request = c.Request.WithContext(slog.NewContext(ctx, logger))
+		log := slog.FromContext(ctx)
+		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
 
@@ -234,6 +244,6 @@ func middleware(service string, opts ...Option) gin.HandlerFunc {
 			loglvl = slog.ErrorLevel
 			logattrs = append(logattrs, slog.String("err", c.Errors.ByType(gin.ErrorTypePrivate).String()))
 		}
-		logger.LogAttrs(loglvl, "gin.access", logattrs...)
+		log.LogAttrs(loglvl, "gin.access", logattrs...)
 	}
 }

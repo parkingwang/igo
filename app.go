@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -107,19 +106,11 @@ func (app *Application) Run(srvs ...core.StartServerfunc) error {
 		}(v)
 	}
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
 	select {
-	case <-quit:
-		stop()
-		log.Println("shutting down gracefully, press Ctrl+C again to force")
-		select {
-		case <-quit:
-			log.Println("Server forced to shutdown")
-		case <-time.After(app.opt.shutdownWaitTime):
-			log.Println("Server exiting")
-		}
+	case <-ctx.Done():
+		log.Printf("shutting down gracefully, wait %v\n", app.opt.shutdownWaitTime)
+		<-time.After(app.opt.shutdownWaitTime)
+		log.Println("Server exiting")
 		return nil
 	case err := <-errChan:
 		return err

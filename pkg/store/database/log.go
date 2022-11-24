@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
 	"gorm.io/gorm/logger"
 )
@@ -27,21 +26,19 @@ func (l *tracelogger) Trace(ctx context.Context, begin time.Time, fc func() (str
 		return
 	}
 	log := slog.FromContext(ctx)
-	span := trace.SpanFromContext(ctx)
 	sql, rows := fc()
 	dur := time.Since(begin)
 	logattr := []any{
 		slog.String("sql", sql),
 		slog.Int64("rows", rows),
 		slog.Duration("latency", dur),
-		slog.String("traceid", span.SpanContext().TraceID().String()),
 	}
 	switch {
 	case err != nil && l.lvl >= logger.Error:
-		log.Error("gorm", err, logattr...)
+		log.Error("gorm.trace", err, logattr...)
 	case dur >= time.Millisecond*500 && l.lvl >= logger.Warn:
-		log.Warn("gorm slow sql", logattr...)
+		log.Warn("gorm.trace slow sql", logattr...)
 	case l.lvl == logger.Info:
-		log.Info("gorm", logattr...)
+		log.Info("gorm.trace", logattr...)
 	}
 }
