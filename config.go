@@ -1,6 +1,6 @@
 package igo
 
-import "github.com/parkingwang/igo/core/config"
+import "github.com/parkingwang/igo/internal/config"
 
 var defaultConfig config.Provider
 
