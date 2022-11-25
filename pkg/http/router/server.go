@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
-	"os"
 	"reflect"
 	"time"
 
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/parkingwang/igo/pkg/http/code"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -20,8 +22,9 @@ import (
 )
 
 type Server struct {
-	opt *option
-	e   *gin.Engine
+	opt     *option
+	e       *gin.Engine
+	httpsrv *http.Server
 }
 
 func (g *Server) Route(f func(*gin.Engine, Handler)) {
@@ -40,17 +43,12 @@ func New(opts ...Option) *Server {
 	e := gin.New()
 	e.ContextWithFallback = true
 	e.NoRoute(func(ctx *gin.Context) {
-		opt.render(ctx, nil,
-			code.NewCodeError(
-				http.StatusNotFound,
-				"route not found",
-			),
-		)
+		opt.render(ctx, nil, code.NewNotfoundError("route not found"))
 	})
 	e.Use(
 		middleware("apiservice"),
 		gin.CustomRecovery(func(c *gin.Context, err any) {
-			slog.FromContext(c).LogAttrs(slog.ErrorLevel, "gin.panic", slog.Any("err", err))
+			slog.Ctx(c).LogAttrs(slog.ErrorLevel, "gin.panic", slog.Any("err", err))
 			c.Abort()
 			opt.render(c, nil,
 				code.NewCodeError(
@@ -61,63 +59,49 @@ func New(opts ...Option) *Server {
 		}),
 	)
 
+	pprof.Register(e)
+
 	return &Server{
 		opt: opt,
 		e:   e,
+		httpsrv: &http.Server{
+			Handler: e,
+		},
 	}
 }
 
-func (g *Server) Run(ctx context.Context) error {
-	srv := &http.Server{
-		Addr:    g.opt.addr,
-		Handler: g.e,
+func (s *Server) Start(ctx context.Context) error {
+	l, err := net.Listen("tcp", s.opt.addr)
+	if err != nil {
+		return err
 	}
-	go func() {
-		<-ctx.Done()
-		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(sctx); err != nil {
-			// 停止失败 强制结束 避免出现kill不掉
-			os.Exit(1)
-		}
-	}()
-	return srv.ListenAndServe()
-}
-
-func GinCtx(ctx context.Context) *gin.Context {
-	c, ok := ctx.(*gin.Context)
-	if ok {
-		return c
-	}
+	slog.FromContext(ctx).Info("Starting HTTP server", slog.String("addr", s.opt.addr))
+	go s.httpsrv.Serve(l)
 	return nil
 }
 
-type option struct {
-	render          Renderer
-	dumpRequestBody bool
-	addr            string
+func (s *Server) Stop(ctx context.Context) error {
+	slog.FromContext(ctx).Info("Shutdown HTTP server", slog.String("addr", s.opt.addr))
+	return s.httpsrv.Shutdown(ctx)
 }
 
-type Option func(*option)
-
-// WithResponseRender 自定义响应输出
-func WithResponseRender(r Renderer) Option {
-	return func(opt *option) {
-		opt.render = r
+// RPCRouter rpc风格的路由
+func (s *Server) RPCRouter() Router {
+	return &route{
+		opt: s.opt,
+		r:   s.e,
 	}
 }
 
-// WithDumpRequestBody 是否输出请求体
-func WithDumpRequestBody(o bool) Option {
-	return func(opt *option) {
-		opt.dumpRequestBody = o
-	}
+// RawRouter 返回原始的ginEngine
+func (s *Server) RawRouter() *gin.Engine {
+	return s.e
 }
 
-func WithAddr(addr string) Option {
-	return func(o *option) {
-		o.addr = addr
-	}
+// RawContext 返回原始的ginContext
+func RawContext(ctx context.Context) (*gin.Context, bool) {
+	c, ok := ctx.(*gin.Context)
+	return c, ok
 }
 
 var errHandleType = errors.New("rpc handle must func(ctx context.Context, in *struct)(out *struct,err error) type")
@@ -149,6 +133,21 @@ func checkHandleValid(tp reflect.Type) (int, bool) {
 	}
 }
 
+func shouldBind(ctx *gin.Context, obj any) error {
+	contentType := ctx.ContentType()
+	method := ctx.Request.Method
+	// 如果未没有指定contentType则按json
+	// 否则bind会失效
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		if contentType == "" {
+			contentType = binding.MIMEJSON
+		}
+	}
+	b := binding.Default(method, contentType)
+	return ctx.ShouldBindWith(obj, b)
+}
+
 func handleWarpf(opt *option) Handler {
 	return func(iface any) gin.HandlerFunc {
 		tp := reflect.TypeOf(iface)
@@ -164,27 +163,33 @@ func handleWarpf(opt *option) Handler {
 			q := reflect.New(reqParamsType)
 			if reqParamsType != rtypEempty {
 				bindq := q.Interface()
-				if err := ctx.ShouldBind(bindq); err != nil {
-					opt.render(ctx, nil, code.NewCodeError(http.StatusBadRequest, err.Error()))
-					return
-				}
 				if len(ctx.Params) > 0 {
 					if err := ctx.ShouldBindUri(bindq); err != nil {
-						opt.render(ctx, nil, code.NewCodeError(http.StatusBadRequest, err.Error()))
+						warpRender(opt, ctx, nil, code.NewBadRequestError(err))
 						return
 					}
 				}
+				if err := shouldBind(ctx, bindq); err != nil {
+					warpRender(opt, ctx, nil, code.NewBadRequestError(err))
+					return
+				}
 			}
 			if opt.dumpRequestBody {
-				slog.FromContext(ctx).Info("request dump", slog.Any("data", q))
+				// 输出请求体
+				slog.Ctx(ctx).LogAttrs(
+					slog.InfoLevel,
+					"gin.dumpRequest",
+					slog.String("data", fmt.Sprintf("%+v", q.Elem())),
+				)
 			}
 			ret := method.Call([]reflect.Value{reflect.ValueOf(ctx), q})
-			if numOut == 1 {
-				opt.render(ctx, nil, ret[0].Interface().(error))
-			} else {
-				opt.render(ctx, ret[0].Interface(), ret[1].Interface().(error))
+			if e := ret[numOut-1].Interface(); e != nil {
+				warpRender(opt, ctx, nil, e.(error))
+				return
 			}
-
+			if numOut == 2 {
+				warpRender(opt, ctx, ret[0].Interface(), nil)
+			}
 		}
 	}
 }
@@ -218,7 +223,7 @@ func middleware(service string, opts ...Option) gin.HandlerFunc {
 		ctx, span := tracer.Start(ctx, spanName, opts...)
 		defer span.End()
 
-		log := slog.FromContext(ctx)
+		log := slog.Ctx(ctx)
 		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
@@ -244,6 +249,13 @@ func middleware(service string, opts ...Option) gin.HandlerFunc {
 			loglvl = slog.ErrorLevel
 			logattrs = append(logattrs, slog.String("err", c.Errors.ByType(gin.ErrorTypePrivate).String()))
 		}
+
+		if rerr := c.GetString("gin.response.err"); rerr != "" {
+			logattrs = append(logattrs,
+				slog.String("response.error", rerr),
+			)
+		}
+
 		log.LogAttrs(loglvl, "gin.access", logattrs...)
 	}
 }

@@ -3,7 +3,6 @@ package amqp
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/rabbitmq/amqp091-go"
 	"go.opentelemetry.io/otel"
@@ -12,33 +11,39 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type Pub struct {
+type Producer struct {
 	msg chan *pubChanData
 	opt *option
+	clt *client
 }
 
-func NewPub(ctx context.Context, opts ...Option) *Pub {
+func NewProducer(ctx context.Context, opts ...Option) *Producer {
 	opt := defaultOption()
 	for _, v := range opts {
 		v(opt)
 	}
-	p := &Pub{msg: make(chan *pubChanData, 1024)}
-	go (&client{dsn: opt.dsn}).runloop(
-		ctx,
-		time.Second*10,
+
+	p := &Producer{msg: make(chan *pubChanData, 1024)}
+	p.clt = newClient(ctx, opt.dsn)
+	go p.clt.runloop(
 		p.loopHandle,
 	)
 	return p
 }
 
-func (p *Pub) loopHandle(ctx context.Context, s *Session, serr error) {
+func (p *Producer) Close() error {
+	p.clt.cancel()
+	return nil
+}
+
+func (p *Producer) loopHandle(ctx context.Context, sess *Session, serr error) bool {
 	if serr != nil {
 		p.opt.err(serr)
-		return
+		return true
 	}
-	if err := p.opt.apply(s.ch); err != nil {
+	if err := p.opt.apply(sess.ch); err != nil {
 		p.opt.err(err)
-		return
+		return true
 	}
 
 	for {
@@ -47,17 +52,18 @@ func (p *Pub) loopHandle(ctx context.Context, s *Session, serr error) {
 			// wait 消息发送完
 			// 消息消费完再退出
 			close(p.msg)
+			return false
 		case msg, ok := <-p.msg:
 			if !ok {
-				return
+				return true
 			}
-			err := s.ch.PublishWithContext(
+			err := sess.ch.PublishWithContext(
 				msg.ctx, msg.exchange, msg.key, false, false, msg.data,
 			)
 			msg.errchan <- err
 			if err != nil {
 				if errors.Is(err, amqp091.ErrClosed) {
-					return
+					return true
 				}
 			}
 		}
@@ -72,7 +78,7 @@ type pubChanData struct {
 	errchan  chan error
 }
 
-func (p *Pub) PublishMsg(ctx context.Context, exchange, key string, msg amqp091.Publishing) error {
+func (p *Producer) PublishMsg(ctx context.Context, exchange, key string, msg amqp091.Publishing) error {
 	if msg.Headers == nil {
 		msg.Headers = make(amqp091.Table)
 	}
@@ -114,7 +120,7 @@ func (p *Pub) PublishMsg(ctx context.Context, exchange, key string, msg amqp091.
 	}
 }
 
-func (p *Pub) Publish(ctx context.Context, exchange, key string, data []byte) error {
+func (p *Producer) Publish(ctx context.Context, exchange, key string, data []byte) error {
 	msg := amqp091.Publishing{
 		Body:         data,
 		DeliveryMode: amqp091.Transient,

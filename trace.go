@@ -63,6 +63,23 @@ func ExportStdout(pretty bool) TraceExporter {
 	}
 }
 
+// ExportEmpty 空实现 启用trace但不导出任何上报数据
+func ExportEmpty() func(ctx context.Context) (trace.SpanExporter, error) {
+	return func(ctx context.Context) (trace.SpanExporter, error) {
+		return &defaultExport{}, nil
+	}
+}
+
+type defaultExport struct{}
+
+func (d *defaultExport) Shutdown(ctx context.Context) error {
+	return nil
+}
+
+func (d *defaultExport) ExportSpans(ctx context.Context, spans []trace.ReadOnlySpan) error {
+	return nil
+}
+
 func newTraceProvider(serviceName string, traceExporter TraceExporter) (*trace.TracerProvider, error) {
 	if traceExporter == nil {
 		return nil, errors.New("failed to create trace exporter: provider is nil")

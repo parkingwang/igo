@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/rabbitmq/amqp091-go"
@@ -16,24 +15,25 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-type Sub struct {
+type Consumer struct {
 	handle map[string]MessageHandle
 	opt    *option
+	clt    *client
 }
 
-func NewConsumer(opts ...Option) *Sub {
+func NewConsumer(opts ...Option) *Consumer {
 	opt := defaultOption()
 	for _, v := range opts {
 		v(opt)
 	}
-	return &Sub{
+	return &Consumer{
 		opt:    opt,
 		handle: make(map[string]MessageHandle),
 	}
 
 }
 
-func (s *Sub) Handle(queue string, h MessageHandle) {
+func (s *Consumer) Subcrite(queue string, h MessageHandle) {
 	if _, ok := s.handle[queue]; ok {
 		slog.Warn("amqp handle alreay used", "queue", queue)
 	}
@@ -52,7 +52,47 @@ func (s *Sub) Handle(queue string, h MessageHandle) {
 	}
 }
 
-func (s *Sub) Run(ctx context.Context) error {
+func (s *Consumer) do(ctx context.Context, sess *Session, serr error) bool {
+	if serr != nil {
+		s.opt.err(serr)
+		return true
+	}
+	if err := s.opt.apply(sess.ch); err != nil {
+		s.opt.err(err)
+		return true
+	}
+	subctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	consumerTag, _ := os.Hostname()
+	for qname, handle := range s.opt.messageHandle {
+		msgs, err := sess.ch.Consume(qname, consumerTag, false, false, false, false, nil)
+		if err != nil {
+			s.opt.err(err)
+			return true
+		}
+		for i := 0; i < s.opt.messageHandleWorker; i++ {
+			go func(h MessageHandle) {
+				for msg := range msgs {
+					h(fromDelivery(msg), msg)
+				}
+				// 通知关闭session
+				// 以便其他handler也可以退出
+				cancel()
+			}(handle)
+		}
+	}
+	select {
+	case <-subctx.Done():
+		sess.ch.Close()
+		return true
+	case <-ctx.Done():
+		// 等待一会 让执行中的任务执行完
+		time.Sleep(time.Second * 2)
+		return false
+	}
+}
+
+func (s *Consumer) Start(ctx context.Context) error {
 	opt := s.opt
 	if opt.dsn == "" {
 		return fmt.Errorf("dsn error")
@@ -60,47 +100,14 @@ func (s *Sub) Run(ctx context.Context) error {
 	if len(opt.messageHandle) == 0 {
 		return fmt.Errorf("messageHandle not found")
 	}
-	clt := &client{dsn: opt.dsn}
-	done := make(chan struct{}, 1)
-	safeDone := func() func() {
-		var one sync.Once
-		return func() {
-			one.Do(func() {
-				close(done)
-			})
-		}
-	}()
-	return clt.runloop(ctx, time.Second*10, func(ctx context.Context, s *Session, serr error) {
-		if serr != nil {
-			opt.err(serr)
-			return
-		}
-		if err := opt.apply(s.ch); err != nil {
-			opt.err(err)
-			return
-		}
-		consumerTag, _ := os.Hostname()
-		for qname, handle := range opt.messageHandle {
-			msgs, err := s.ch.Consume(qname, consumerTag, false, false, false, false, nil)
-			if err != nil {
-				opt.err(err)
-				return
-			}
-			for i := 0; i < opt.messageHandleWorker; i++ {
-				go func(h MessageHandle) {
-					for msg := range msgs {
-						h(fromDelivery(msg), msg)
-					}
-					safeDone()
-				}(handle)
-			}
-		}
-		select {
-		case <-done:
-		case <-ctx.Done():
-			safeDone()
-		}
-	})
+	s.clt = newClient(ctx, opt.dsn)
+	go s.clt.runloop(s.do)
+	return nil
+}
+
+func (s *Consumer) Stop(ctx context.Context) error {
+	s.clt.cancel()
+	return nil
 }
 
 func fromDelivery(d amqp091.Delivery) context.Context {

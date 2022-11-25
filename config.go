@@ -1,17 +1,11 @@
-package core
+package igo
 
-import (
-	"context"
-
-	"github.com/parkingwang/igo/core/config"
-)
-
-// StartServerfunc 启动服务
-// 如果上层退出或取消 则内部需要平滑退出
-type StartServerfunc func(context.Context) error
+import "github.com/parkingwang/igo/core/config"
 
 var defaultConfig config.Provider
 
+// SetConfig 设置配置文件路径
+// 基于viper支持 json,toml,ini,yaml等类型
 func SetConfig(path string) {
 	p, err := config.LoadConfig(path)
 	if err != nil {

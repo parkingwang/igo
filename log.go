@@ -1,13 +1,18 @@
-package log
+package igo
 
 import (
 	"io"
+	"os"
 
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
 )
 
-var scrkeyTokens = []string{
+func init() {
+	slog.SetDefault(slog.New(NewTraceHandler(os.Stderr)))
+}
+
+var LogPrivacyAttrKey = []string{
 	"password",
 	"token",
 	"secretkey",
@@ -16,7 +21,7 @@ var scrkeyTokens = []string{
 
 func NewTraceHandler(w io.Writer) slog.Handler {
 	sets := make(map[string]struct{})
-	for _, v := range scrkeyTokens {
+	for _, v := range LogPrivacyAttrKey {
 		sets[v] = struct{}{}
 	}
 	opt := slog.HandlerOptions{
@@ -29,37 +34,41 @@ func NewTraceHandler(w io.Writer) slog.Handler {
 			}
 			if _, ok := sets[a.Key]; ok {
 				if a.Value.Kind() == slog.StringKind {
-					return slog.String(a.Key, replaceToken(a.Value.String()))
+					return slog.String(a.Key, replaceLogPrivacyAttrKey(a.Value.String()))
 				}
 			}
 			return a
 		},
 	}
-	return &traceHandle{
+	return &logTraceHandle{
 		opt.NewTextHandler(w),
 	}
 }
 
-func replaceToken(s string) string {
-	n := len(s)
-	if n < 3 {
+func replaceLogPrivacyAttrKey(s string) string {
+	p := []rune(s)
+	n := len(p)
+	if n == 0 {
 		return s
 	}
-	start := n / 3
-	end := start * 2
-	news := []byte(s)
-	for i := start; i < end; i++ {
-		news[i] = '*'
+	if n < 3 {
+		return string(p[0]) + "*"
 	}
-	return string(news)
+	start := n / 3
+	for i := start; i < n-start; i++ {
+		p[i] = '*'
+	}
+	return string(p)
 }
 
-type traceHandle struct {
+type logTraceHandle struct {
 	*slog.TextHandler
 }
 
-func (h *traceHandle) Handle(r slog.Record) error {
+func (h *logTraceHandle) Handle(r slog.Record) error {
 	span := trace.SpanContextFromContext(r.Context)
-	r.AddAttrs(slog.String("traceid", span.TraceID().String()))
+	if span.IsValid() {
+		r.AddAttrs(slog.String("traceid", span.TraceID().String()))
+	}
 	return h.TextHandler.Handle(r)
 }

@@ -25,7 +25,7 @@ func (l *tracelogger) Trace(ctx context.Context, begin time.Time, fc func() (str
 	if l.lvl <= logger.Silent {
 		return
 	}
-	log := slog.FromContext(ctx)
+	log := slog.Ctx(ctx)
 	sql, rows := fc()
 	dur := time.Since(begin)
 	logattr := []any{

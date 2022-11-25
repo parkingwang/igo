@@ -2,13 +2,23 @@ package amqp
 
 import (
 	"context"
-	"time"
 
 	"github.com/rabbitmq/amqp091-go"
 )
 
 type client struct {
-	dsn string
+	dsn     string
+	cancel  context.CancelFunc
+	baseCtx context.Context
+}
+
+func newClient(ctx context.Context, dsn string) *client {
+	subctx, cancel := context.WithCancel(ctx)
+	return &client{
+		dsn:     dsn,
+		baseCtx: subctx,
+		cancel:  cancel,
+	}
 }
 
 type Session struct {
@@ -32,17 +42,17 @@ func (c *client) getSession() (*Session, error) {
 	return &Session{ch, conn}, err
 }
 
-func (c *client) runloop(ctx context.Context, dur time.Duration, f func(context.Context, *Session, error)) error {
+type loopHandle func(context.Context, *Session, error) bool
+
+func (c *client) runloop(f loopHandle) error {
 	for {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
 		sess, err := c.getSession()
-		f(ctx, sess, err)
+		if next := f(c.baseCtx, sess, err); !next {
+			return nil
+		}
 		if err == nil {
 			sess.conn.Close()
 		}
-		time.Sleep(dur)
 	}
 }
 
