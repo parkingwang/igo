@@ -2,52 +2,43 @@ package igo
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 
+	"github.com/parkingwang/igo/internal/trace"
+	"github.com/parkingwang/igo/pkg/http/web"
+	"github.com/parkingwang/igo/pkg/store/database"
+	"github.com/parkingwang/igo/pkg/store/redis"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 	"golang.org/x/exp/slog"
-
-	"github.com/parkingwang/igo/pkg/store/database"
-	"github.com/parkingwang/igo/pkg/store/redis"
 
 	"go.opentelemetry.io/contrib/propagators/b3"
 	"go.opentelemetry.io/otel"
 )
 
 type Application struct {
-	name string
-	opt  *option
-
 	fxProvides    []any
 	fxInvokeFuncs []any
 }
 
-type option struct {
-	exporter TraceExporter
-}
+func New() *Application {
 
-type Option func(*option)
+	cfg := Conf().Child("app")
 
-// WithOtelTraceExport 链路追踪数据上报配置
-func WithOtelTraceExport(tp TraceExporter) Option {
-	return func(opt *option) {
-		opt.exporter = tp
-	}
-}
-
-func New(name string, opts ...Option) *Application {
-	opt := &option{
-		exporter: ExportEmpty(),
-	}
-	for _, apply := range opts {
-		apply(opt)
-	}
+	slog.Info("init app",
+		slog.String("name", cfg.GetString("name")),
+		slog.String("version", cfg.GetString("version")),
+		slog.String("traceExportType", cfg.GetString("traceExport.type")),
+	)
 
 	// enable trace
-	tp, err := newTraceProvider(name, opt.exporter)
+	tp, err := trace.NewTraceProvider(
+		cfg.GetString("name"),
+		cfg.GetString("version"),
+		initTraceExport(),
+	)
+
 	if err != nil {
 		slog.Error("init tracer povider failed", err)
 		os.Exit(1)
@@ -55,37 +46,13 @@ func New(name string, opts ...Option) *Application {
 	otel.SetTextMapPropagator(b3.New())
 	otel.SetTracerProvider(tp)
 
-	app := &Application{
-		name: name,
-		opt:  opt,
+	// 自动加载pkg/store
+	if err := initPkgStore(); err != nil {
+		slog.Error("init pkg/store failed", err)
+		os.Exit(1)
 	}
 
-	return app
-}
-
-// AutoRegisterStore 自动注册数据库和缓存依赖
-// 需要加载配置文件 并且存在key store.database/store.redis
-func (app *Application) AutoRegisterStore() error {
-	config := Conf()
-	if config == nil {
-		return fmt.Errorf("config not set")
-	}
-	if config.IsSet("store.database") {
-		cfg := make(map[string]database.Config)
-		if err := config.Decode("store.database", &cfg); err != nil {
-			return err
-		}
-		return database.RegisterFromConfig(cfg)
-	}
-
-	if config.IsSet("store.redis") {
-		cfg := make(map[string]redis.Config)
-		if err := config.Decode("store.redis", &cfg); err != nil {
-			return err
-		}
-		return redis.RegisterFromConfig(cfg)
-	}
-	return nil
+	return &Application{}
 }
 
 // Provide 依赖注入构造器
@@ -170,4 +137,58 @@ func (m *fxInjectLogger) LogEvent(event fxevent.Event) {
 type Servicer interface {
 	Start(context.Context) error
 	Stop(context.Context) error
+}
+
+func (app *Application) CreateWebServer() *web.Server {
+	cfg := Conf().Child("server.web")
+	if cfg == nil {
+		return web.New()
+	}
+	return web.New(
+		web.WithAddr(cfg.GetString("addr")),
+		web.WithDumpRequestBody(cfg.GetBool("dumpRequest")),
+	)
+}
+
+func initPkgStore() error {
+	storecfg := Conf().Child("store")
+	if storecfg.IsSet("database") {
+		cfg := make(map[string]database.Config)
+		if err := storecfg.Decode("database", &cfg); err != nil {
+			return err
+		}
+		return database.RegisterFromConfig(cfg)
+	}
+
+	if storecfg.IsSet("redis") {
+		cfg := make(map[string]redis.Config)
+		if err := storecfg.Decode("redis", &cfg); err != nil {
+			return err
+		}
+		return redis.RegisterFromConfig(cfg)
+	}
+	return nil
+}
+
+func initTraceExport() trace.TraceExporter {
+	cfg := Conf().Child("app.traceExport")
+	if cfg != nil {
+		switch cfg.GetString("type") {
+		case "http":
+			return trace.ExportHTTP(
+				cfg.GetString("endpoint"),
+				cfg.GetBool("usehttps"),
+			)
+		case "grpc":
+			return trace.ExportGRPC(
+				cfg.GetString("endpoint"),
+			)
+		case "stdout":
+			return trace.ExportStdout(
+				cfg.GetBool("pretty"),
+			)
+		}
+	}
+
+	return trace.ExportEmpty()
 }

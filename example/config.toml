@@ -1,0 +1,33 @@
+[app]
+
+name = "nihao"
+version = "0.0.1"
+
+
+debugMode = true
+
+
+# trace信息导出
+# traceExport.type = "http"
+# traceExport.config = {endpoint=""}
+
+
+
+[server.web]
+
+addr = "0.0.0.0:8082"
+dumpRequest = true
+
+
+
+
+[store.database]
+
+# default.url = ""
+# default.driver = "mysql"
+# default.maxidleconn = 10
+
+
+[store.redis]
+
+

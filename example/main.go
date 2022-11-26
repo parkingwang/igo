@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/parkingwang/igo"
 	"github.com/parkingwang/igo/pkg/http/code"
-	"github.com/parkingwang/igo/pkg/http/router"
+	"github.com/parkingwang/igo/pkg/http/web"
 	"golang.org/x/exp/slog"
 )
 
@@ -17,7 +17,7 @@ type Something struct {
 
 func main() {
 
-	app := igo.New("myServer")
+	app := igo.New()
 
 	app.Provide(
 		// 添加一个构造函数 有些地方依赖它
@@ -27,25 +27,27 @@ func main() {
 	)
 
 	app.Run(
+		// 简单的定时器服务示例
 		func(s *Something) igo.Servicer {
 			return &ticker{value: s.Value}
 		},
-
+		// web服务
 		func() igo.Servicer {
-			r := router.New(
-				router.WithAddr(":8084"),
-				router.WithDumpRequestBody(true),
-			)
-			initRoutes(r.RPCRouter())
-			return r
+			srv := app.CreateWebServer()
+			initRoutes(srv)
+			return srv
 		},
 	)
 }
 
-func initRoutes(r router.Router) {
-	r.Comment("获取用户列表").
+func initRoutes(srv *web.Server) {
+	r := srv.RPCRouter()
+
+	user := r.Comment("用户").
+		Group("/user")
+	user.Comment("获取用户列表").
 		Get("/", middleGinHandler, listUser)
-	r.Comment("获知指定id的用户信息").
+	user.Comment("获知指定id的用户信息").
 		Get("/:id", getUser)
 }
 
@@ -61,7 +63,7 @@ var userlist = []UserInfo{
 	{4, "jack"},
 }
 
-func listUser(ctx context.Context, in *router.Empty) ([]UserInfo, error) {
+func listUser(ctx context.Context, in *web.Empty) ([]UserInfo, error) {
 	log := slog.Ctx(ctx)
 
 	log.Info("get users", "count", len(userlist))

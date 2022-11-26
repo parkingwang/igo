@@ -1,7 +1,6 @@
-package router
+package web
 
 import (
-	"fmt"
 	"net/http"
 	"reflect"
 	"runtime"
@@ -64,19 +63,52 @@ func (s *route) Use(handler ...gin.HandlerFunc) {
 
 func (s *route) Group(path string, handler ...gin.HandlerFunc) Router {
 	r := s.r.(gin.IRouter).Group(path, handler...)
+
+	s.opt.routesInfo = append(s.opt.routesInfo, routeInfo{
+		isDir:    true,
+		path:     r.BasePath(),
+		comment:  s.describe,
+		children: make([]routeInfo, 0),
+	})
+
 	return &route{opt: s.opt, r: r, basepath: r.BasePath()}
 }
 
 func (s *route) Handle(method, path string, handler ...any) {
 	hs := make([]gin.HandlerFunc, len(handler))
+	var has bool
 	for i, h := range handler {
 		x, ok := h.(func(*gin.Context))
 		if ok {
 			hs[i] = x
 		} else {
-			n := runtime.FuncForPC(reflect.ValueOf(h).Pointer()).Name()
-			fmt.Println(method, s.basepath+path, n, s.describe)
-			hs[i] = handleWarpf(s.opt)(h)
+			if !has {
+				name := runtime.FuncForPC(reflect.ValueOf(h).Pointer()).Name()
+				info := routeInfo{
+					path:    s.basepath + path,
+					comment: s.describe,
+					pcName:  name,
+					method:  method,
+					funType: reflect.TypeOf(h),
+				}
+				routes := s.opt.routesInfo
+				if s.basepath != "" {
+					for k, v := range routes {
+						if v.isDir &&
+							v.path == s.basepath {
+							routes[k].children = append(routes[k].children, info)
+							break
+						}
+					}
+				} else {
+					routes = append(routes, info)
+				}
+				s.opt.routesInfo = routes
+				hs[i] = handleWarpf(s.opt)(h)
+				has = true
+			} else {
+				panic("handle only support one rpc handler")
+			}
 		}
 	}
 	s.r.Handle(method, path, hs...)

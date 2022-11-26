@@ -1,4 +1,4 @@
-package router
+package web
 
 import (
 	"context"
@@ -32,10 +32,7 @@ func (g *Server) Route(f func(*gin.Engine, Handler)) {
 }
 
 func New(opts ...Option) *Server {
-	opt := &option{
-		addr:   ":8080",
-		render: DefaultRender,
-	}
+	opt := defaultOption()
 	for _, o := range opts {
 		o(opt)
 	}
@@ -71,6 +68,21 @@ func New(opts ...Option) *Server {
 }
 
 func (s *Server) Start(ctx context.Context) error {
+	for _, v := range s.opt.routesInfo {
+		if v.isDir {
+			if len(v.children) == 0 {
+				continue
+			}
+			fmt.Println("[api] ", v.path, v.comment)
+			for _, h := range v.children {
+				fmt.Println("[api] ", h.path, h.method, h.pcName, h.comment)
+			}
+			fmt.Println("[api] ")
+		} else {
+			fmt.Println("[api] ", v.method, v.path, v.pcName, v.comment)
+		}
+	}
+
 	l, err := net.Listen("tcp", s.opt.addr)
 	if err != nil {
 		return err

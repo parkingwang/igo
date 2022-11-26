@@ -1,6 +1,6 @@
 # igo
 
-集成链路追踪的后端服务框架 [例子](/demo/main.go)
+集成链路追踪的后端服务框架 [例子](/example/main.go)
 
 依赖库
 * web框架 [gin](github.com/gin-gonic/gin)

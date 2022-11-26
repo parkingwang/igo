@@ -1,4 +1,4 @@
-package igo
+package trace
 
 import (
 	"context"
@@ -80,7 +80,7 @@ func (d *defaultExport) ExportSpans(ctx context.Context, spans []trace.ReadOnlyS
 	return nil
 }
 
-func newTraceProvider(serviceName string, traceExporter TraceExporter) (*trace.TracerProvider, error) {
+func NewTraceProvider(serviceName, version string, traceExporter TraceExporter) (*trace.TracerProvider, error) {
 	if traceExporter == nil {
 		return nil, errors.New("failed to create trace exporter: provider is nil")
 	}
@@ -88,6 +88,7 @@ func newTraceProvider(serviceName string, traceExporter TraceExporter) (*trace.T
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			attribute.String("service.name", serviceName),
+			attribute.String("service.version", version),
 		),
 	)
 	if err != nil {
@@ -109,7 +110,7 @@ func newTraceProvider(serviceName string, traceExporter TraceExporter) (*trace.T
 
 }
 
-const defaultTracekName = "github.com/parkingwang/igo/igo/core"
+const defaultTracekName = "github.com/parkingwang/igo"
 
 // TracerStart 快速的开启一次trace记录
 func TracerStart(ctx context.Context, name string) (context.Context, tr.Span) {

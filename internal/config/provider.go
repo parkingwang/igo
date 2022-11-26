@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/spf13/viper"
@@ -33,7 +32,7 @@ func LoadConfig(path string) (Provider, error) {
 	p := viper.New()
 	p.SetConfigFile(path)
 	if err := p.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("load config %s faild: %w", path, err)
+		return nil, err
 	}
 	return &defaultProvider{Viper: p}, nil
 }
@@ -43,10 +42,19 @@ type defaultProvider struct {
 }
 
 func (p *defaultProvider) Child(key string) Provider {
-	sub := p.Viper.Sub(key)
-	return &defaultProvider{Viper: sub}
+	if p.Viper != nil {
+		sub := p.Viper.Sub(key)
+		if sub == nil {
+			return nil
+		}
+		return &defaultProvider{Viper: sub}
+	}
+	return nil
 }
 
 func (p *defaultProvider) Decode(key string, value any) error {
-	return p.Viper.UnmarshalKey(key, value)
+	if p.Viper != nil {
+		return p.Viper.UnmarshalKey(key, value)
+	}
+	return nil
 }

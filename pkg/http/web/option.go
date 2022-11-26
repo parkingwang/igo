@@ -1,9 +1,19 @@
-package router
+package web
 
 type option struct {
 	render          Renderer
 	dumpRequestBody bool
 	addr            string
+	doc             *ApiDocOption
+	routesInfo      []routeInfo
+}
+
+func defaultOption() *option {
+	return &option{
+		addr:       ":8080",
+		render:     DefaultRender,
+		routesInfo: make([]routeInfo, 0),
+	}
 }
 
 type Option func(*option)
@@ -27,3 +37,10 @@ func WithAddr(addr string) Option {
 		o.addr = addr
 	}
 }
+
+// WithDoc 启用文档
+// func WithDoc(opt *ApiDocOption) Option {
+// 	return func(o *option) {
+// 		o.doc = opt
+// 	}
+// }
