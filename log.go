@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	slog.SetDefault(slog.New(NewTraceHandler(os.Stderr)))
+	slog.SetDefault(slog.New(NewTraceSlogHandler(os.Stderr, false, slog.DebugLevel)))
 }
 
 var LogPrivacyAttrKey = []string{
@@ -19,12 +19,15 @@ var LogPrivacyAttrKey = []string{
 	"accesskey",
 }
 
-func NewTraceHandler(w io.Writer) slog.Handler {
+// NewTraceSlogHandler 集成trace的slog handler
+func NewTraceSlogHandler(w io.Writer, addSource bool, lvl slog.Leveler) slog.Handler {
 	sets := make(map[string]struct{})
 	for _, v := range LogPrivacyAttrKey {
 		sets[v] = struct{}{}
 	}
 	opt := slog.HandlerOptions{
+		Level:     lvl,
+		AddSource: addSource,
 		ReplaceAttr: func(a slog.Attr) slog.Attr {
 			if a.Key == slog.TimeKey {
 				return slog.String(

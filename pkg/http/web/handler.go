@@ -63,14 +63,12 @@ func (s *route) Use(handler ...gin.HandlerFunc) {
 
 func (s *route) Group(path string, handler ...gin.HandlerFunc) Router {
 	r := s.r.(gin.IRouter).Group(path, handler...)
-
 	s.opt.routesInfo = append(s.opt.routesInfo, routeInfo{
 		isDir:    true,
 		path:     r.BasePath(),
 		comment:  s.describe,
 		children: make([]routeInfo, 0),
 	})
-
 	return &route{opt: s.opt, r: r, basepath: r.BasePath()}
 }
 
@@ -78,37 +76,39 @@ func (s *route) Handle(method, path string, handler ...any) {
 	hs := make([]gin.HandlerFunc, len(handler))
 	var has bool
 	for i, h := range handler {
-		x, ok := h.(func(*gin.Context))
+		ginFunc, ok := h.(func(*gin.Context))
 		if ok {
-			hs[i] = x
+			hs[i] = ginFunc
 		} else {
-			if !has {
-				name := runtime.FuncForPC(reflect.ValueOf(h).Pointer()).Name()
-				info := routeInfo{
-					path:    s.basepath + path,
-					comment: s.describe,
-					pcName:  name,
-					method:  method,
-					funType: reflect.TypeOf(h),
-				}
-				routes := s.opt.routesInfo
-				if s.basepath != "" {
-					for k, v := range routes {
-						if v.isDir &&
-							v.path == s.basepath {
-							routes[k].children = append(routes[k].children, info)
-							break
-						}
-					}
-				} else {
-					routes = append(routes, info)
-				}
-				s.opt.routesInfo = routes
-				hs[i] = handleWarpf(s.opt)(h)
-				has = true
-			} else {
+			if has {
 				panic("handle only support one rpc handler")
 			}
+			// 添加到路由信息表 为了自动生成doc
+			name := runtime.FuncForPC(reflect.ValueOf(h).Pointer()).Name()
+			info := routeInfo{
+				path:    s.basepath + path,
+				comment: s.describe,
+				pcName:  name,
+				method:  method,
+				funType: reflect.TypeOf(h),
+			}
+			routes := s.opt.routesInfo
+			if s.basepath != "" {
+				for k, v := range routes {
+					if v.isDir &&
+						v.path == s.basepath {
+						routes[k].children = append(routes[k].children, info)
+						break
+					}
+				}
+			} else {
+				routes = append(routes, info)
+			}
+			s.opt.routesInfo = routes
+			// 使用handleWarpf 转为gin.HandleFunc
+			hs[i] = handleWarpf(s.opt)(h)
+			has = true
+
 		}
 	}
 	s.r.Handle(method, path, hs...)

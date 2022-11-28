@@ -78,6 +78,7 @@ func (c *Client) Do(r *http.Request, out any) error {
 		if err != nil {
 			continue
 		} else {
+			resp.Body.Close()
 			// 小于 500 的无需重试
 			if resp.StatusCode >= 500 {
 				continue

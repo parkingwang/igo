@@ -3,6 +3,7 @@ package igo
 import (
 	"context"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/parkingwang/igo/internal/trace"
@@ -20,23 +21,52 @@ import (
 type Application struct {
 	fxProvides    []any
 	fxInvokeFuncs []any
+	opt           *option
 }
 
-func New() *Application {
+type option struct {
+	name    string
+	version string
+}
+
+type Option func(*option)
+
+// WithName 配置应用名字
+func WithName(name string) Option {
+	return func(o *option) {
+		o.name = name
+	}
+}
+
+// WithVersion 配置应用版本
+func WithVersion(ver string) Option {
+	return func(o *option) {
+		o.version = ver
+	}
+}
+
+func New(opt ...Option) *Application {
+
+	o := &option{
+		name:    "myService",
+		version: getVCSVersion(),
+	}
+
+	for _, apply := range opt {
+		apply(o)
+	}
 
 	cfg := Conf().Child("app")
 
 	slog.Info("init app",
-		slog.String("name", cfg.GetString("name")),
-		slog.String("version", cfg.GetString("version")),
+		slog.String("name", o.name),
+		slog.String("version", o.version),
 		slog.String("traceExportType", cfg.GetString("traceExport.type")),
 	)
 
 	// enable trace
 	tp, err := trace.NewTraceProvider(
-		cfg.GetString("name"),
-		cfg.GetString("version"),
-		initTraceExport(),
+		o.name, o.version, initTraceExport(),
 	)
 
 	if err != nil {
@@ -52,7 +82,7 @@ func New() *Application {
 		os.Exit(1)
 	}
 
-	return &Application{}
+	return &Application{opt: o}
 }
 
 // Provide 依赖注入构造器
@@ -175,20 +205,25 @@ func initTraceExport() trace.TraceExporter {
 	if cfg != nil {
 		switch cfg.GetString("type") {
 		case "http":
-			return trace.ExportHTTP(
-				cfg.GetString("endpoint"),
-				cfg.GetBool("usehttps"),
-			)
+			return trace.ExportHTTP(cfg.GetString("endpoint"), cfg.GetBool("usehttps"))
 		case "grpc":
-			return trace.ExportGRPC(
-				cfg.GetString("endpoint"),
-			)
+			return trace.ExportGRPC(cfg.GetString("endpoint"))
 		case "stdout":
-			return trace.ExportStdout(
-				cfg.GetBool("pretty"),
-			)
+			return trace.ExportStdout(cfg.GetBool("pretty"))
 		}
 	}
 
 	return trace.ExportEmpty()
+}
+
+func getVCSVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if ok {
+		for _, v := range info.Settings {
+			if v.Key == "csv.revision" {
+				return v.Value
+			}
+		}
+	}
+	return ""
 }

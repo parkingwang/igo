@@ -4,7 +4,6 @@ type option struct {
 	render          Renderer
 	dumpRequestBody bool
 	addr            string
-	doc             *ApiDocOption
 	routesInfo      []routeInfo
 }
 

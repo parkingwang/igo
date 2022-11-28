@@ -1,6 +1,6 @@
 module github.com/parkingwang/igo
 
-go 1.19
+go 1.18
 
 require (
 	github.com/gin-contrib/pprof v1.4.0
