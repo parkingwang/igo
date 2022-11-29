@@ -46,6 +46,17 @@ func WithVersion(ver string) Option {
 }
 
 func New(opt ...Option) *Application {
+	cfg := Conf().Child("app")
+	slog.SetDefault(slog.New(NewTraceSlogHandler(
+		os.Stderr,
+		cfg.GetBool("log.addSource"),
+		func() slog.Leveler {
+			if cfg.GetBool("log.debug") {
+				return slog.DebugLevel
+			}
+			return slog.InfoLevel
+		}(),
+	)))
 
 	o := &option{
 		name:    "myService",
@@ -55,8 +66,6 @@ func New(opt ...Option) *Application {
 	for _, apply := range opt {
 		apply(o)
 	}
-
-	cfg := Conf().Child("app")
 
 	slog.Info("init app",
 		slog.String("name", o.name),
@@ -220,7 +229,7 @@ func getVCSVersion() string {
 	info, ok := debug.ReadBuildInfo()
 	if ok {
 		for _, v := range info.Settings {
-			if v.Key == "csv.revision" {
+			if v.Key == "vcs.revision" {
 				return v.Value
 			}
 		}

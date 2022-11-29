@@ -2,15 +2,10 @@ package igo
 
 import (
 	"io"
-	"os"
 
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
 )
-
-func init() {
-	slog.SetDefault(slog.New(NewTraceSlogHandler(os.Stderr, false, slog.DebugLevel)))
-}
 
 var LogPrivacyAttrKey = []string{
 	"password",

@@ -1,33 +1,49 @@
 [app]
 
-name = "nihao"
-version = "0.0.1"
-
-
-debugMode = true
-
 
 # trace信息导出
+# 都出类型 http/grpc
 # traceExport.type = "http"
-# traceExport.config = {endpoint=""}
+# traceExport.config = {endpoint="oltp.xxxx.com"}
+
+# 是否输出debug级别日志 默认info级别
+log.debug = false
+# 日志是否添加代码位置
+log.addSource = true
+
 
 
 
 [server.web]
 
+# web服务地址
 addr = "0.0.0.0:8082"
+# 日常输出请求参数
 dumpRequest = true
+
 
 
 
 
 [store.database]
 
-# default.url = ""
-# default.driver = "mysql"
-# default.maxidleconn = 10
+# 连接地址 必填
+# default.url = "admin:1234@tcp(127.0.0.1:3306)/mydb?charset=utf8" 
+# 最大连接数
+# default.maxOpenConns = 10
+# 最大空闲连接数
+# default.maxIdleConns = 1
+# 最大空闲时间
+# default.connMaxIdleTime = "10m"
 
 
 [store.redis]
 
-
+# 连接地址 必填 /0 代表db
+# default.url = "tcp://password@127.0.0.1:5672/0"
+# 读取超时
+# default.readTimeout = "5s"
+# 写入超时
+# default.writeTimeout = "5s"
+# 最大重试次数
+# default.maxRetries = 3

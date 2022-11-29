@@ -68,21 +68,8 @@ func New(opts ...Option) *Server {
 }
 
 func (s *Server) Start(ctx context.Context) error {
-	for _, v := range s.opt.routesInfo {
-		if v.isDir {
-			if len(v.children) == 0 {
-				continue
-			}
-			fmt.Println("[api] ", v.path, v.comment)
-			for _, h := range v.children {
-				fmt.Println("[api] ", h.path, h.method, h.pcName, h.comment)
-			}
-			fmt.Println("[api] ")
-		} else {
-			fmt.Println("[api] ", v.method, v.path, v.pcName, v.comment)
-		}
-	}
-
+	s.opt.routes.echo()
+	s.opt.routes.ToDoc()
 	l, err := net.Listen("tcp", s.opt.addr)
 	if err != nil {
 		return err
@@ -139,7 +126,9 @@ func checkHandleValid(tp reflect.Type) (int, bool) {
 	case 1:
 		return 1, rtypeError.Implements(tp.Out(0))
 	case 2:
-		return 2, rtypeError.Implements(tp.Out(1))
+		return 2, rtypeError.Implements(tp.Out(1)) &&
+			tp.Out(0).Kind() == reflect.Ptr &&
+			tp.Out(0).Elem().Kind() == reflect.Struct
 	default:
 		return n, false
 	}

@@ -4,14 +4,14 @@ type option struct {
 	render          Renderer
 	dumpRequestBody bool
 	addr            string
-	routesInfo      []routeInfo
+	routes          Routes
 }
 
 func defaultOption() *option {
 	return &option{
-		addr:       ":8080",
-		render:     DefaultRender,
-		routesInfo: make([]routeInfo, 0),
+		addr:   ":8080",
+		render: DefaultRender,
+		routes: make([]routeInfo, 0),
 	}
 }
 
@@ -36,10 +36,3 @@ func WithAddr(addr string) Option {
 		o.addr = addr
 	}
 }
-
-// WithDoc 启用文档
-// func WithDoc(opt *ApiDocOption) Option {
-// 	return func(o *option) {
-// 		o.doc = opt
-// 	}
-// }

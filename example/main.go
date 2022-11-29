@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,7 @@ import (
 	"golang.org/x/exp/slog"
 )
 
+// Something 你好
 type Something struct {
 	Value string
 }
@@ -41,19 +43,37 @@ func main() {
 }
 
 func initRoutes(srv *web.Server) {
+
 	r := srv.RPCRouter()
 
-	user := r.Comment("用户").
-		Group("/user")
-	user.Comment("获取用户列表").
-		Get("/", middleGinHandler, listUser)
-	user.Comment("获知指定id的用户信息").
-		Get("/:id", getUser)
+	r.Get("/", Hello)
+
+	user := r.Group("/user")
+
+	user.Get("/", middleGinHandler, listUser)
+	user.Get("/:id", GetUser)
+
 }
 
+// UserInfo 用户信息
 type UserInfo struct {
 	ID   int    `json:"id"`
-	Name string `json:"name"`
+	Name string `json:"name" comment:"备注再这里"`
+}
+
+// UserInfoList 用户信息列表
+type UserInfoList struct {
+	Items []UserInfo `json:"items"`
+}
+
+// listUser 获取用户列表.
+func listUser(ctx context.Context, in *web.Empty) (*UserInfoList, error) {
+	log := slog.Ctx(ctx)
+	log.Info("get users", "count", len(userlist))
+	if v := ctx.Value("value"); v != nil {
+		log.Info("get middle value", "value", v)
+	}
+	return &UserInfoList{Items: userlist}, nil
 }
 
 var userlist = []UserInfo{
@@ -63,29 +83,28 @@ var userlist = []UserInfo{
 	{4, "jack"},
 }
 
-func listUser(ctx context.Context, in *web.Empty) ([]UserInfo, error) {
-	log := slog.Ctx(ctx)
-
-	log.Info("get users", "count", len(userlist))
-
-	if v := ctx.Value("value"); v != nil {
-		log.Info("get middle value", "value", v)
-	}
-
-	return userlist, nil
-}
-
 type UserIDReq struct {
-	ID int `uri:"id" binding:"required"`
+	ID   int    `json:"id" binding:"required"`
+	Name string `json:"name"`
 }
 
-func getUser(ctx context.Context, in *UserIDReq) (*UserInfo, error) {
+// GetUser 获取单个用户
+func GetUser(ctx context.Context, in *UserIDReq) (*UserInfo, error) {
 	for _, user := range userlist {
 		if user.ID == in.ID {
 			return &user, nil
 		}
 	}
 	return nil, code.NewNotfoundError("user not found")
+}
+
+// Hello 一些方法.
+func Hello(ctx context.Context, in *web.Empty) error {
+	c, ok := web.RawContext(ctx)
+	if ok {
+		c.String(http.StatusOK, "hello,world")
+	}
+	return nil
 }
 
 func middleGinHandler(c *gin.Context) {
