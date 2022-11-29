@@ -1,13 +1,10 @@
 package web
 
 import (
-	"encoding/json"
-	"fmt"
+	_ "embed"
 	"go/ast"
 	"go/token"
-	"os"
 	"reflect"
-	"runtime"
 	"runtime/debug"
 	"strings"
 
@@ -15,11 +12,6 @@ import (
 	"github.com/parkingwang/igo/pkg/http/web/oas"
 	"golang.org/x/tools/go/packages"
 )
-
-type ApiDocOption struct {
-	RoutePath string // 文档访问的路由
-	Descripe  string // 接口描述
-}
 
 func (r *Routes) deep(rs []routeInfo, replacePkg func(string) string, maps map[string]string) {
 	for k, route := range rs {
@@ -33,7 +25,10 @@ func (r *Routes) deep(rs []routeInfo, replacePkg func(string) string, maps map[s
 	}
 }
 
-func (r *Routes) ToDoc() {
+//go:embed oas/swagger-ui.html
+var swaggerUIData []byte
+
+func (r *Routes) ToDoc(info oas.DocInfo) (*oas.Spec, error) {
 	m := make(map[string]string)
 	x, _ := debug.ReadBuildInfo()
 	r.deep(*r, func(s string) string {
@@ -58,8 +53,7 @@ func (r *Routes) ToDoc() {
 	pkgs, err := packages.Load(cfg, patterns...)
 
 	if err != nil {
-		fmt.Println(err)
-		return
+		return nil, err
 	}
 	// 保存函数对应的注释
 	funcComments := map[string]string{}
@@ -77,10 +71,9 @@ func (r *Routes) ToDoc() {
 		}
 	}
 
-	spec := oas.NewOAS()
-	spec.Info.Title = "demo"
-	spec.Info.Description = "这里是一个描述看看从哪里后去合适"
-	spec.Info.Version = "0.0.1"
+	spec := oas.NewSpec()
+	spec.Info = info
+
 	// spec.Components.Schema["responseError"] = oas.Generate(reflect.ValueOf(nil))
 
 	paths := make(map[string]map[string]any)
@@ -95,10 +88,7 @@ func (r *Routes) ToDoc() {
 		}
 	}
 	spec.Paths = paths
-	if err := json.NewEncoder(os.Stderr).Encode(spec); err != nil {
-		fmt.Println(err)
-	}
-	runtime.GC()
+	return spec, nil
 }
 
 const defaultContentType = "application/json"

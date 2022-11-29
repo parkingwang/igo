@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/parkingwang/igo/pkg/http/code"
+	"github.com/parkingwang/igo/pkg/http/web/oas"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
@@ -69,7 +70,20 @@ func New(opts ...Option) *Server {
 
 func (s *Server) Start(ctx context.Context) error {
 	s.opt.routes.echo()
-	s.opt.routes.ToDoc()
+	docspec, err := s.opt.routes.ToDoc(s.opt.docInfo)
+	if err != nil {
+		slog.Error("build openapi3.0 failed", err)
+	}
+	s.RawRouter().GET("/debug/doc", func(ctx *gin.Context) {
+		ctx.Header("Content-Type", "text/html")
+		ctx.Writer.Write(swaggerUIData)
+	})
+	s.RawRouter().GET("/debug/doc/swagger.json", func(ctx *gin.Context) {
+		docspec.Servers = []oas.Server{
+			{Url: "http://" + ctx.Request.Host},
+		}
+		ctx.IndentedJSON(http.StatusOK, docspec)
+	})
 	l, err := net.Listen("tcp", s.opt.addr)
 	if err != nil {
 		return err

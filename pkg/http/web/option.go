@@ -1,10 +1,13 @@
 package web
 
+import "github.com/parkingwang/igo/pkg/http/web/oas"
+
 type option struct {
 	render          Renderer
 	dumpRequestBody bool
 	addr            string
 	routes          Routes
+	docInfo         oas.DocInfo
 }
 
 func defaultOption() *option {
@@ -34,5 +37,11 @@ func WithDumpRequestBody(o bool) Option {
 func WithAddr(addr string) Option {
 	return func(o *option) {
 		o.addr = addr
+	}
+}
+
+func WithOpenAPI(info oas.DocInfo) Option {
+	return func(o *option) {
+		o.docInfo = info
 	}
 }

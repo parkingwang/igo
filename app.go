@@ -3,11 +3,11 @@ package igo
 import (
 	"context"
 	"os"
-	"runtime/debug"
 	"strings"
 
 	"github.com/parkingwang/igo/internal/trace"
 	"github.com/parkingwang/igo/pkg/http/web"
+	"github.com/parkingwang/igo/pkg/http/web/oas"
 	"github.com/parkingwang/igo/pkg/store/database"
 	"github.com/parkingwang/igo/pkg/store/redis"
 	"go.uber.org/fx"
@@ -21,31 +21,10 @@ import (
 type Application struct {
 	fxProvides    []any
 	fxInvokeFuncs []any
-	opt           *option
+	info          AppInfo
 }
 
-type option struct {
-	name    string
-	version string
-}
-
-type Option func(*option)
-
-// WithName 配置应用名字
-func WithName(name string) Option {
-	return func(o *option) {
-		o.name = name
-	}
-}
-
-// WithVersion 配置应用版本
-func WithVersion(ver string) Option {
-	return func(o *option) {
-		o.version = ver
-	}
-}
-
-func New(opt ...Option) *Application {
+func New(info AppInfo) *Application {
 	cfg := Conf().Child("app")
 	slog.SetDefault(slog.New(NewTraceSlogHandler(
 		os.Stderr,
@@ -58,24 +37,19 @@ func New(opt ...Option) *Application {
 		}(),
 	)))
 
-	o := &option{
-		name:    "myService",
-		version: getVCSVersion(),
-	}
-
-	for _, apply := range opt {
-		apply(o)
+	if info.Version == "" {
+		info.Version = getVCSVersion()
 	}
 
 	slog.Info("init app",
-		slog.String("name", o.name),
-		slog.String("version", o.version),
+		slog.String("name", info.Name),
+		slog.String("version", info.Version),
 		slog.String("traceExportType", cfg.GetString("traceExport.type")),
 	)
 
 	// enable trace
 	tp, err := trace.NewTraceProvider(
-		o.name, o.version, initTraceExport(),
+		info.Name, info.Version, initTraceExport(),
 	)
 
 	if err != nil {
@@ -91,7 +65,7 @@ func New(opt ...Option) *Application {
 		os.Exit(1)
 	}
 
-	return &Application{opt: o}
+	return &Application{info: info}
 }
 
 // Provide 依赖注入构造器
@@ -186,6 +160,7 @@ func (app *Application) CreateWebServer() *web.Server {
 	return web.New(
 		web.WithAddr(cfg.GetString("addr")),
 		web.WithDumpRequestBody(cfg.GetBool("dumpRequest")),
+		web.WithOpenAPI(oas.DocInfo(app.info)),
 	)
 }
 
@@ -223,16 +198,4 @@ func initTraceExport() trace.TraceExporter {
 	}
 
 	return trace.ExportEmpty()
-}
-
-func getVCSVersion() string {
-	info, ok := debug.ReadBuildInfo()
-	if ok {
-		for _, v := range info.Settings {
-			if v.Key == "vcs.revision" {
-				return v.Value
-			}
-		}
-	}
-	return ""
 }

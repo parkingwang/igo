@@ -17,9 +17,14 @@ type Something struct {
 	Value string
 }
 
+var info = igo.AppInfo{
+	Name:        "myname",
+	Description: "这是一个演示",
+}
+
 func main() {
 
-	app := igo.New()
+	app := igo.New(info)
 
 	app.Provide(
 		// 添加一个构造函数 有些地方依赖它

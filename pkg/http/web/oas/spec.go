@@ -1,12 +1,9 @@
 package oas
 
-type OAS struct {
-	Openapi string `json:"openapi"`
-	Info    struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
-		Version     string `json:"version"`
-	} `json:"info"`
+type Spec struct {
+	Openapi    string                    `json:"openapi"`
+	Info       DocInfo                   `json:"info"`
+	Servers    []Server                  `json:"servers"`
 	Tags       []string                  `json:"tags"`
 	Paths      map[string]map[string]any `json:"paths"`
 	Components struct {
@@ -14,6 +11,9 @@ type OAS struct {
 	} `json:"components"`
 }
 
+type Server struct {
+	Url string `json:"url"`
+}
 type OASRequest struct {
 	Tags        []string       `json:"tags"`
 	Summary     string         `json:"summary"`
@@ -22,8 +22,14 @@ type OASRequest struct {
 	Responses   map[string]any `json:"responses"`
 }
 
-func NewOAS() *OAS {
-	return &OAS{
+type DocInfo struct {
+	Name        string `json:"title"`
+	Description string `json:"description"`
+	Version     string `json:"version"`
+}
+
+func NewSpec() *Spec {
+	return &Spec{
 		Openapi: "3.0.3",
 		Tags:    make([]string, 0),
 	}
