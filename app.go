@@ -160,7 +160,12 @@ func (app *Application) CreateWebServer() *web.Server {
 	return web.New(
 		web.WithAddr(cfg.GetString("addr")),
 		web.WithDumpRequestBody(cfg.GetBool("dumpRequest")),
-		web.WithOpenAPI(oas.DocInfo(app.info)),
+		web.WithOpenAPI(oas.DocInfo{
+			Title:          app.info.Name,
+			Description:    app.info.Description,
+			Version:        app.info.Version,
+			TermsOfService: "https://github.com/parkingwang/igo",
+		}),
 	)
 }
 

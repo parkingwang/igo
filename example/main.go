@@ -66,19 +66,29 @@ type UserInfo struct {
 	Name string `json:"name" comment:"备注再这里"`
 }
 
-// UserInfoList 用户信息列表
-type UserInfoList struct {
+// UserInfoListResponse 用户信息列表
+type UserInfoListResponse struct {
 	Items []UserInfo `json:"items"`
 }
 
+// UserInfoListRequest 请求
+type UserInfoListRequest struct {
+	Page     int    `form:"page" binding:"gte=0" comment:"第几页"`
+	PageSize int    `form:"pageSize" binding:"gte=0,lte=100" comment:"每页条数"`
+	Keyword  string `form:"keyword" comment:"按指定关键字查询"`
+}
+
 // listUser 获取用户列表.
-func listUser(ctx context.Context, in *web.Empty) (*UserInfoList, error) {
+// 这里放一些详细的东西使用markdown语法 api文档也可以显示
+// * aaa
+// * bbb
+func listUser(ctx context.Context, in *UserInfoListRequest) (*UserInfoListResponse, error) {
 	log := slog.Ctx(ctx)
 	log.Info("get users", "count", len(userlist))
 	if v := ctx.Value("value"); v != nil {
 		log.Info("get middle value", "value", v)
 	}
-	return &UserInfoList{Items: userlist}, nil
+	return &UserInfoListResponse{Items: userlist}, nil
 }
 
 var userlist = []UserInfo{
@@ -89,8 +99,7 @@ var userlist = []UserInfo{
 }
 
 type UserIDReq struct {
-	ID   int    `json:"id" binding:"required"`
-	Name string `json:"name"`
+	ID int `uri:"id" binding:"required"`
 }
 
 // GetUser 获取单个用户

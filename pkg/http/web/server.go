@@ -174,17 +174,9 @@ func handleWarpf(opt *option) Handler {
 		reqParamsType := tp.In(1).Elem()
 
 		return func(ctx *gin.Context) {
-
 			q := reflect.New(reqParamsType)
 			if reqParamsType != rtypEempty {
-				bindq := q.Interface()
-				if len(ctx.Params) > 0 {
-					if err := ctx.ShouldBindUri(bindq); err != nil {
-						warpRender(opt, ctx, nil, code.NewBadRequestError(err))
-						return
-					}
-				}
-				if err := shouldBind(ctx, bindq); err != nil {
+				if err := checkReqParam(ctx, q.Interface()); err != nil {
 					warpRender(opt, ctx, nil, code.NewBadRequestError(err))
 					return
 				}
@@ -207,6 +199,18 @@ func handleWarpf(opt *option) Handler {
 			}
 		}
 	}
+}
+
+func checkReqParam(ctx *gin.Context, obj any) error {
+	if len(ctx.Params) > 0 {
+		if err := ctx.ShouldBindUri(obj); err != nil {
+			return err
+		}
+	}
+	if err := ctx.ShouldBindHeader(obj); err != nil {
+		return err
+	}
+	return shouldBind(ctx, obj)
 }
 
 func middleware(service string, opts ...Option) gin.HandlerFunc {

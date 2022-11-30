@@ -3,6 +3,8 @@ package code
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/go-playground/validator/v10"
 )
 
 type CodeError struct {
@@ -23,9 +25,19 @@ func NewCodeError(code int, msg string, args ...any) error {
 
 // NewBadRequestError 请求参数错误
 func NewBadRequestError(v any) error {
+	if fe, ok := v.(validator.ValidationErrors); ok {
+		if len(fe) > 0 {
+			// fmt.Println("structfield", fe[0].StructField())
+			// fmt.Println("param", fe[0].Param())
+			// fmt.Println("error", fe[0].Error())
+			// fmt.Println("tag", fe[0].Tag())
+			// fmt.Println("actualTag", fe[0].ActualTag())
+			v = fmt.Sprintf("%s %s", fe[0].Error(), fe[0].Param())
+		}
+	}
 	return &CodeError{
 		http.StatusBadRequest,
-		fmt.Sprintf("参数错误 %v", v),
+		fmt.Sprintf("验证失败 %v", v),
 	}
 }
 

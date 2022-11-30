@@ -14,18 +14,25 @@ type Spec struct {
 type Server struct {
 	Url string `json:"url"`
 }
-type OASRequest struct {
-	Tags        []string       `json:"tags"`
-	Summary     string         `json:"summary"`
-	Parameters  map[string]any `json:"parameters,omitempty"`
-	RequestBody map[string]any `json:"requestBody,omitempty"`
-	Responses   map[string]any `json:"responses"`
+
+type RequestComment struct {
+	Summary     string `json:"summary,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+type Request struct {
+	Tags []string `json:"tags,omitempty"`
+	RequestComment
+	OperationID string          `json:"operationId"`
+	Parameters  []any           `json:"parameters,omitempty"`
+	RequestBody *Body           `json:"requestBody,omitempty"`
+	Responses   map[string]Body `json:"responses,omitempty"`
 }
 
 type DocInfo struct {
-	Name        string `json:"title"`
-	Description string `json:"description"`
-	Version     string `json:"version"`
+	Title          string `json:"title"`
+	Description    string `json:"description"`
+	Version        string `json:"version"`
+	TermsOfService string `json:"termsOfService"`
 }
 
 func NewSpec() *Spec {
@@ -33,4 +40,10 @@ func NewSpec() *Spec {
 		Openapi: "3.0.3",
 		Tags:    make([]string, 0),
 	}
+}
+
+type Body struct {
+	Description string            `json:"description,omitempty"`
+	Content     map[string]Schema `json:"content,omitempty"`
+	Required    bool              `json:"required,omitempty"`
 }

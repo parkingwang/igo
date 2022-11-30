@@ -20,10 +20,11 @@
 
 基于gin实现的类RPC编码风格的restful服务
 
-* 支持链路追踪
-* RPC风格编码
-* 自动生成接口文档 (设计中)
-* 支持原始http/gin风格，解决rpc无法处理如websocket等需求问题
+* 支持链路追踪包含日志关联
+* 使用RPC风格编码restful接口
+* 自动生成接口文档 (openapi 3.0)
+* 日志敏感词过滤
+* 支持原始http/gin风格，解决rpc模式无法处理如websocket等需求问题
 
 
 

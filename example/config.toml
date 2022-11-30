@@ -9,7 +9,7 @@
 # 是否输出debug级别日志 默认info级别
 log.debug = false
 # 日志是否添加代码位置
-log.addSource = true
+log.addSource = false
 
 
 

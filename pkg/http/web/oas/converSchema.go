@@ -33,13 +33,13 @@ type Schema struct {
 	Example              interface{}       `json:"example,omitempty"`
 }
 
-func parseDeep(v reflect.Value, name string, out map[string]Schema) map[string]Schema {
+func parseDeep(v reflect.Value, name, tag string, out map[string]Schema) map[string]Schema {
 	switch v.Kind() {
 	case reflect.Ptr:
 		if !v.IsNil() {
-			return parseDeep(v.Elem(), name, out)
+			return parseDeep(v.Elem(), name, tag, out)
 		}
-		return parseDeep(reflect.New(v.Type().Elem()), name, out)
+		return parseDeep(reflect.New(v.Type().Elem()), name, tag, out)
 	case reflect.String:
 		out[name] = Schema{Type: schemaTypeString}
 	case reflect.Bool:
@@ -59,30 +59,29 @@ func parseDeep(v reflect.Value, name string, out map[string]Schema) map[string]S
 			out[name] = Schema{Type: schemaTypeString, Format: formatDateTime}
 		default:
 			p := Schema{Type: schemaTypeObject, Properties: map[string]Schema{}, Required: make([]string, 0)}
-
 			for i := 0; i < v.NumField(); i++ {
 				vtyp := v.Type().Field(i)
-				// 只处理jsontag
-				jsonTag := strings.Split(vtyp.Tag.Get("json"), ",")
-
-				if jsonTag[0] != "" {
-					p.Properties = parseDeep(v.Field(i), jsonTag[0], p.Properties)
+				x, ok := vtyp.Tag.Lookup(tag)
+				if ok {
+					p.Properties = parseDeep(v.Field(i), x, tag, p.Properties)
 					// 是否有注释？
 					if comment := vtyp.Tag.Get("comment"); comment != "" {
 						p.Description = comment
 					}
 					// 是否必填？
 					if xc := strings.Split(vtyp.Tag.Get("binding"), ","); xc[0] == "required" {
-						p.Required = append(p.Required, jsonTag[0])
+						p.Required = append(p.Required, x)
 					}
 				}
 			}
-			out[name] = p
+			if len(p.Properties) > 0 {
+				out[name] = p
+			}
 		}
 	case reflect.Slice, reflect.Array:
 		p := Schema{Type: schemaTypeArray}
 		v2 := reflect.New(v.Type().Elem())
-		dummy := parseDeep(v2, "dummy", map[string]Schema{})
+		dummy := parseDeep(v2, "dummy", tag, map[string]Schema{})
 		d := dummy["dummy"]
 		p.Items = &d
 
@@ -96,16 +95,15 @@ func parseDeep(v reflect.Value, name string, out map[string]Schema) map[string]S
 		}
 
 		v3 := reflect.New(v.Type().Elem())
-		p.Properties = parseDeep(v3, "example", p.Properties)
+		p.Properties = parseDeep(v3, "example", tag, p.Properties)
 		out[name] = p
 	}
 
 	return out
 }
 
-func Generate(input reflect.Value) map[string]Schema {
+func Generate(input reflect.Value, tag string) map[string]Schema {
 	response := map[string]Schema{}
-	response = parseDeep(input, "schema", response)
-
+	response = parseDeep(input, "schema", tag, response)
 	return response
 }
