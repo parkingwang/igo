@@ -2,83 +2,18 @@ package web
 
 import (
 	_ "embed"
-	"go/ast"
-	"go/token"
 	"net/http"
 	"reflect"
-	"runtime/debug"
 	"strings"
 
 	"github.com/gin-gonic/gin/binding"
 	"github.com/parkingwang/igo/pkg/http/web/oas"
-	"golang.org/x/tools/go/packages"
 )
-
-func (r *Routes) deep(rs []routeInfo, replacePkg func(string) string, maps map[string]string) {
-	for k, route := range rs {
-		if route.isDir {
-			r.deep(route.children, replacePkg, maps)
-			continue
-		}
-		i := strings.LastIndex(route.pcName, ".")
-		rs[k].pcName = replacePkg(route.pcName[:i]) + route.pcName[i:]
-		maps[replacePkg(route.pcName[:i])+route.pcName[i:]] = replacePkg(route.pcName[:i])
-	}
-}
 
 //go:embed oas/swagger-ui.html
 var swaggerUIData []byte
 
 func (r *Routes) ToDoc(info oas.DocInfo) (*oas.Spec, error) {
-	m := make(map[string]string)
-	x, _ := debug.ReadBuildInfo()
-	r.deep(*r, func(s string) string {
-		if s == "main" {
-			return x.Path
-		}
-		return s
-	}, m)
-
-	pkgnames := make(map[string]struct{})
-
-	for _, v := range m {
-		pkgnames[v] = struct{}{}
-	}
-
-	patterns := make([]string, 0)
-	for k := range pkgnames {
-		patterns = append(patterns, k)
-	}
-
-	cfg := &packages.Config{Fset: token.NewFileSet(), Mode: packages.NeedTypes | packages.NeedSyntax}
-	pkgs, err := packages.Load(cfg, patterns...)
-
-	if err != nil {
-		return nil, err
-	}
-	// 保存函数对应的注释
-	funcComments := map[string]oas.RequestComment{}
-	for _, pkg := range pkgs {
-		for _, s := range pkg.Syntax {
-			for name, obj := range s.Scope.Objects {
-				switch obj.Kind {
-				case ast.Fun:
-					fullname := pkg.ID + "." + name
-					if _, ok := m[fullname]; ok {
-						doc := obj.Decl.(*ast.FuncDecl).Doc.Text()
-						ps := strings.SplitN(doc, "\n", 2)
-						if len(ps) == 1 {
-							ps = append(ps, "")
-						}
-						funcComments[fullname] = oas.RequestComment{
-							Summary:     ps[0],
-							Description: ps[1],
-						}
-					}
-				}
-			}
-		}
-	}
 
 	spec := oas.NewSpec()
 	spec.Info = info
@@ -88,12 +23,15 @@ func (r *Routes) ToDoc(info oas.DocInfo) (*oas.Spec, error) {
 	paths := make(map[string]map[string]any)
 	for _, route := range *r {
 		if route.isDir {
-			spec.Tags = append(spec.Tags, strings.TrimLeft(route.basePath, "/"))
+			spec.Tags = append(spec.Tags, oas.Tag{
+				Name:        strings.TrimLeft(route.basePath, "/"),
+				Description: route.comment,
+			})
 			for _, ru := range route.children {
-				toConveterRequest(paths, ru, funcComments[ru.pcName])
+				toConveterRequest(paths, *ru)
 			}
 		} else {
-			toConveterRequest(paths, route, funcComments[route.pcName])
+			toConveterRequest(paths, *route)
 		}
 	}
 	spec.Paths = paths
@@ -108,12 +46,12 @@ var contentTypes = map[string]string{
 
 var reqTypeEmpty = reflect.TypeOf(Empty{})
 
-func toConveterRequest(root map[string]map[string]any, route routeInfo, comment oas.RequestComment) {
-	// 将gin的 :xx *xx 替换为openapi的 {xx}
+func toConveterRequest(root map[string]map[string]any, route routeInfo) {
+	// 将gin的 :xx 替换为openapi的 {xx}
 	path := route.basePath + route.path
 	ps := strings.Split(path, "/")
 	for i, p := range ps {
-		if strings.HasPrefix(p, ":") || strings.HasPrefix(p, "*") {
+		if strings.HasPrefix(p, ":") {
 			ps[i] = "{" + p[1:] + "}"
 		}
 	}
@@ -130,9 +68,11 @@ func toConveterRequest(root map[string]map[string]any, route routeInfo, comment 
 	}
 
 	rp := oas.Request{
-		Tags:           tags,
-		RequestComment: comment,
-		OperationID:    createOperationID(route),
+		Tags: tags,
+		RequestComment: oas.RequestComment{
+			Summary: route.comment,
+		},
+		OperationID: createOperationID(route),
 		Responses: map[string]oas.Body{"200": {
 			Description: "Successful operation",
 		}},
@@ -149,10 +89,10 @@ func toConveterRequest(root map[string]map[string]any, route routeInfo, comment 
 		if len(bodytypes) > 0 {
 			body := &oas.Body{
 				Required: true,
-				Content:  make(map[string]oas.Schema),
+				Content:  make(map[string]map[string]oas.Schema),
 			}
 			for _, tag := range bodytypes {
-				body.Content[contentTypes[tag]] = oas.Generate(reflect.New(in), tag)["schema"]
+				body.Content[contentTypes[tag]] = oas.Generate(reflect.New(in), tag)
 			}
 			rp.RequestBody = body
 		}
@@ -162,8 +102,8 @@ func toConveterRequest(root map[string]map[string]any, route routeInfo, comment 
 		const responseTag = "json"
 		rp.Responses["200"] = oas.Body{
 			Description: "Successful operation",
-			Content: map[string]oas.Schema{
-				contentTypes[responseTag]: oas.Generate(reflect.New(out), responseTag)["schema"],
+			Content: map[string]map[string]oas.Schema{
+				contentTypes[responseTag]: oas.Generate(reflect.New(out), responseTag),
 			},
 		}
 	}
@@ -181,16 +121,20 @@ func toConveterParameters(route routeInfo, in reflect.Type) ([]any, []string) {
 			"description": field.Tag.Get("comment"),
 			"required":    (strings.Split(field.Tag.Get("binding"), ","))[0] == "required",
 		}
+		if (strings.Split(field.Tag.Get("binding"), ","))[0] == "required" {
+			item["required"] = true
+		}
 		if v, ok := field.Tag.Lookup("header"); ok {
 			item["name"] = v
 			item["in"] = "header"
-			item["schema"] = oas.Generate(reflect.New(field.Type), "header")
+			item["schema"] = oas.Generate(reflect.New(field.Type), "header")["schema"]
 			list = append(list, item)
 		}
 		if v, ok := field.Tag.Lookup("uri"); ok {
 			item["name"] = v
 			item["in"] = "path"
-			item["schema"] = oas.Generate(reflect.New(field.Type), "uri")
+			item["required"] = true
+			item["schema"] = oas.Generate(reflect.New(field.Type), "uri")["schema"]
 			list = append(list, item)
 		}
 		if v, ok := field.Tag.Lookup("form"); ok {
@@ -198,7 +142,7 @@ func toConveterParameters(route routeInfo, in reflect.Type) ([]any, []string) {
 			if route.method == http.MethodGet {
 				item["name"] = v
 				item["in"] = "query"
-				item["schema"] = oas.Generate(reflect.New(field.Type), "form")
+				item["schema"] = oas.Generate(reflect.New(field.Type), "form")["schema"]
 				list = append(list, item)
 			} else {
 				bodyType["form"] = struct{}{}

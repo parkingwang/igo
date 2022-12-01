@@ -14,7 +14,7 @@ func defaultOption() *option {
 	return &option{
 		addr:   ":8080",
 		render: DefaultRender,
-		routes: make([]routeInfo, 0),
+		routes: make([]*routeInfo, 0),
 	}
 }
 

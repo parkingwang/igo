@@ -16,6 +16,7 @@ import (
 	"github.com/parkingwang/igo/pkg/http/web/oas"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 	"go.opentelemetry.io/otel/trace"
@@ -70,20 +71,24 @@ func New(opts ...Option) *Server {
 
 func (s *Server) Start(ctx context.Context) error {
 	s.opt.routes.echo()
-	docspec, err := s.opt.routes.ToDoc(s.opt.docInfo)
-	if err != nil {
-		slog.Error("build openapi3.0 failed", err)
-	}
-	s.RawRouter().GET("/debug/doc", func(ctx *gin.Context) {
-		ctx.Header("Content-Type", "text/html")
-		ctx.Writer.Write(swaggerUIData)
-	})
-	s.RawRouter().GET("/debug/doc/swagger.json", func(ctx *gin.Context) {
-		docspec.Servers = []oas.Server{
-			{Url: "http://" + ctx.Request.Host},
+	{
+		docspec, err := s.opt.routes.ToDoc(s.opt.docInfo)
+		if err != nil {
+			slog.Error("build openapi3.0 failed", err)
 		}
-		ctx.IndentedJSON(http.StatusOK, docspec)
-	})
+		e := s.GinEngine()
+		e.GET("/debug/doc", func(ctx *gin.Context) {
+			ctx.Header("Content-Type", "text/html")
+			ctx.Writer.Write(swaggerUIData)
+		})
+		e.GET("/debug/doc/swagger.json", func(ctx *gin.Context) {
+			docspec.Servers = []oas.Server{
+				{Url: "http://" + ctx.Request.Host},
+			}
+			ctx.IndentedJSON(http.StatusOK, docspec)
+		})
+	}
+
 	l, err := net.Listen("tcp", s.opt.addr)
 	if err != nil {
 		return err
@@ -98,21 +103,21 @@ func (s *Server) Stop(ctx context.Context) error {
 	return s.httpsrv.Shutdown(ctx)
 }
 
-// RPCRouter rpc风格的路由
-func (s *Server) RPCRouter() Router {
+// Router rpc风格的路由
+func (s *Server) Router() Router {
 	return &route{
 		opt: s.opt,
 		r:   s.e,
 	}
 }
 
-// RawRouter 返回原始的ginEngine
-func (s *Server) RawRouter() *gin.Engine {
+// GinEngine 返回原始的ginEngine
+func (s *Server) GinEngine() *gin.Engine {
 	return s.e
 }
 
-// RawContext 返回原始的ginContext
-func RawContext(ctx context.Context) (*gin.Context, bool) {
+// GinContext 返回原始的ginContext
+func GinContext(ctx context.Context) (*gin.Context, bool) {
 	c, ok := ctx.(*gin.Context)
 	return c, ok
 }
@@ -202,15 +207,15 @@ func handleWarpf(opt *option) Handler {
 }
 
 func checkReqParam(ctx *gin.Context, obj any) error {
+	if err := shouldBind(ctx, obj); err != nil {
+		return err
+	}
 	if len(ctx.Params) > 0 {
 		if err := ctx.ShouldBindUri(obj); err != nil {
 			return err
 		}
 	}
-	if err := ctx.ShouldBindHeader(obj); err != nil {
-		return err
-	}
-	return shouldBind(ctx, obj)
+	return nil
 }
 
 func middleware(service string, opts ...Option) gin.HandlerFunc {
@@ -265,6 +270,7 @@ func middleware(service string, opts ...Option) gin.HandlerFunc {
 
 		if len(c.Errors) > 0 {
 			span.SetAttributes(attribute.String("gin.errors", c.Errors.String()))
+			span.SetStatus(codes.Error, c.Errors.String())
 			loglvl = slog.ErrorLevel
 			logattrs = append(logattrs, slog.String("err", c.Errors.ByType(gin.ErrorTypePrivate).String()))
 		}

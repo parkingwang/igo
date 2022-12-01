@@ -1,33 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta
-    name="description"
-    content="SwaggerUI"
-  />
-  <title>SwaggerUI</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui.css" />
-  <style>
-    body{
-      font-size: 14px;
-    }
-    *{
-      font-family: 'Cascadia Code','Lucida Console','Monaco','微软雅黑',monospace
-    }
-  </style>
-</head>
-<body>
-<div id="swagger-ui"></div>
-<script src="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui-bundle.js" crossorigin></script>
-<script>
-  window.onload = () => {
-    window.ui = SwaggerUIBundle({
-        url: '/debug/doc/swagger.json',
-      dom_id: '#swagger-ui',
-    });
-  };
-</script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="SwaggerUI" />
+    <title>SwaggerUI</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui.css"
+    />
+    <style>
+      body {
+        font-size: 14px;
+      }
+      * {
+        font-family: "Cascadia Code", "Lucida Console", "Monaco", "微软雅黑",
+          monospace !important;
+      }
+      td.parameters-col_description,
+      td.response-col_description:not(.col_header) {
+        font-size: 13px;
+        padding-top: 0 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script
+      src="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui-bundle.js"
+      crossorigin
+    ></script>
+    <script>
+      window.onload = () => {
+        window.ui = SwaggerUIBundle({
+          url: "/debug/doc/swagger.json",
+          dom_id: "#swagger-ui",
+        });
+      };
+    </script>
+  </body>
 </html>

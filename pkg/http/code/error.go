@@ -27,17 +27,13 @@ func NewCodeError(code int, msg string, args ...any) error {
 func NewBadRequestError(v any) error {
 	if fe, ok := v.(validator.ValidationErrors); ok {
 		if len(fe) > 0 {
-			// fmt.Println("structfield", fe[0].StructField())
-			// fmt.Println("param", fe[0].Param())
-			// fmt.Println("error", fe[0].Error())
-			// fmt.Println("tag", fe[0].Tag())
-			// fmt.Println("actualTag", fe[0].ActualTag())
-			v = fmt.Sprintf("%s %s", fe[0].Error(), fe[0].Param())
+			e := fe[0]
+			v = fmt.Sprintf("Requirement %s %s %s", e.StructField(), e.Tag(), e.Param())
 		}
 	}
 	return &CodeError{
 		http.StatusBadRequest,
-		fmt.Sprintf("验证失败 %v", v),
+		fmt.Sprintf("%v", v),
 	}
 }
 

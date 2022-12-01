@@ -63,6 +63,9 @@ func (c *Client) Do(r *http.Request, out any) error {
 	if c.opt.ModfityRequest != nil {
 		c.opt.ModfityRequest(r)
 	}
+	// do := func(r *http.Request) {
+
+	// }
 	var resp *http.Response
 	var err error
 	for i := 0; i < c.opt.MaxRetryCount; i++ {
@@ -78,10 +81,15 @@ func (c *Client) Do(r *http.Request, out any) error {
 		if err != nil {
 			continue
 		} else {
-			resp.Body.Close()
 			// 小于 500 的无需重试
-			if resp.StatusCode >= 500 {
-				continue
+			if resp.StatusCode < 500 {
+				break
+			} else {
+				if i == c.opt.MaxRetryCount-1 {
+					break
+				} else {
+					resp.Body.Close()
+				}
 			}
 		}
 	}

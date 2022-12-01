@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -28,6 +29,7 @@ func main() {
 
 	app.Provide(
 		// 添加一个构造函数 有些地方依赖它
+		// 具体可以参考go-uber/fx
 		func() *Something {
 			return &Something{Value: "nihao"}
 		},
@@ -35,6 +37,8 @@ func main() {
 
 	app.Run(
 		// 简单的定时器服务示例
+		// 需要实现 igo.Servicer
+		// 依赖 Provide 提供 *Something
 		func(s *Something) igo.Servicer {
 			return &ticker{value: s.Value}
 		},
@@ -49,21 +53,21 @@ func main() {
 
 func initRoutes(srv *web.Server) {
 
-	r := srv.RPCRouter()
+	r := srv.Router()
 
 	r.Get("/", Hello)
-
 	user := r.Group("/user")
-
-	user.Get("/", middleGinHandler, listUser)
-	user.Get("/:id", GetUser)
+	user.Comment("user object")
+	user.Get("/", middleGinHandler, ListUser)
+	user.Get("/:id", GetUser).Comment("测试用 id 可以是 1,2,3,4 试试换成不同的值看看")
+	user.Post("/:id/add", CreateUser)
 
 }
 
 // UserInfo 用户信息
 type UserInfo struct {
-	ID   int    `json:"id"`
-	Name string `json:"name" comment:"备注再这里"`
+	ID   int    `json:"id" uri:"id"`
+	Name string `json:"name" form:"name" comment:"备注再这里"`
 }
 
 // UserInfoListResponse 用户信息列表
@@ -78,11 +82,7 @@ type UserInfoListRequest struct {
 	Keyword  string `form:"keyword" comment:"按指定关键字查询"`
 }
 
-// listUser 获取用户列表.
-// 这里放一些详细的东西使用markdown语法 api文档也可以显示
-// * aaa
-// * bbb
-func listUser(ctx context.Context, in *UserInfoListRequest) (*UserInfoListResponse, error) {
+func ListUser(ctx context.Context, in *UserInfoListRequest) (*UserInfoListResponse, error) {
 	log := slog.Ctx(ctx)
 	log.Info("get users", "count", len(userlist))
 	if v := ctx.Value("value"); v != nil {
@@ -99,7 +99,7 @@ var userlist = []UserInfo{
 }
 
 type UserIDReq struct {
-	ID int `uri:"id" binding:"required"`
+	ID int `uri:"id" binding:"required" comment:"用户id"`
 }
 
 // GetUser 获取单个用户
@@ -112,28 +112,33 @@ func GetUser(ctx context.Context, in *UserIDReq) (*UserInfo, error) {
 	return nil, code.NewNotfoundError("user not found")
 }
 
-// Hello 一些方法.
+// Hello 通过使用gin.Context 可以突破rpc风格上的使用限制
 func Hello(ctx context.Context, in *web.Empty) error {
-	c, ok := web.RawContext(ctx)
+	c, ok := web.GinContext(ctx)
 	if ok {
+		fmt.Println(c.Request.URL.Hostname())
+		fmt.Println(c.Request.Host)
 		c.String(http.StatusOK, "hello,world")
 	}
 	return nil
 }
 
+func CreateUser(ctx context.Context, in *UserInfo) (*UserInfo, error) {
+	return in, nil
+}
+
+// 一个gin风格的中间件
 func middleGinHandler(c *gin.Context) {
 	log := slog.Ctx(c)
-
 	// 传递值
 	c.Set("value", "123")
-
 	log.Info("start")
 	c.Next()
 	log.Info("end")
 }
 
-//////////////////////
-
+// ////////////////////
+// 自定义一个服务 实现igo.Servicer接口
 type ticker struct {
 	t     *time.Ticker
 	value string

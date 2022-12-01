@@ -6,7 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/parkingwang/igo/pkg/http/code"
-	"gorm.io/gorm"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Renderer 渲染响应
@@ -16,21 +17,30 @@ type Renderer func(*gin.Context, any, error)
 func DefaultRender(ctx *gin.Context, data any, err error) {
 	if err != nil {
 		var e *code.CodeError
-		if errors.As(err, &e) {
-			ctx.JSON(e.Code, gin.H{"message": e.Message})
-		} else {
-			code := http.StatusInternalServerError
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				code = http.StatusNotFound
+		if !errors.As(err, &e) {
+			e = &code.CodeError{
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
 			}
-			ctx.JSON(code, gin.H{"message": err.Error()})
 		}
+		span := trace.SpanFromContext(ctx)
+		span.SetStatus(codes.Error, err.Error())
+		resp := DefaultErrorResponse{
+			Message: e.Message,
+			TraceID: span.SpanContext().TraceID().String(),
+		}
+		ctx.JSON(e.Code, resp)
 	} else {
 		if data != nil {
 			ctx.JSON(http.StatusOK, data)
 			return
 		}
 	}
+}
+
+type DefaultErrorResponse struct {
+	Message string `json:"message"`
+	TraceID string `json:"traceid"`
 }
 
 func warpRender(opt *option, ctx *gin.Context, data any, err error) {

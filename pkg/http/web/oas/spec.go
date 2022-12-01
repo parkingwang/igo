@@ -4,7 +4,7 @@ type Spec struct {
 	Openapi    string                    `json:"openapi"`
 	Info       DocInfo                   `json:"info"`
 	Servers    []Server                  `json:"servers"`
-	Tags       []string                  `json:"tags"`
+	Tags       []Tag                     `json:"tags"`
 	Paths      map[string]map[string]any `json:"paths"`
 	Components struct {
 		Schema map[string]Schema `json:"schema"`
@@ -13,6 +13,11 @@ type Spec struct {
 
 type Server struct {
 	Url string `json:"url"`
+}
+
+type Tag struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 type RequestComment struct {
@@ -38,12 +43,12 @@ type DocInfo struct {
 func NewSpec() *Spec {
 	return &Spec{
 		Openapi: "3.0.3",
-		Tags:    make([]string, 0),
+		Tags:    make([]Tag, 0),
 	}
 }
 
 type Body struct {
-	Description string            `json:"description,omitempty"`
-	Content     map[string]Schema `json:"content,omitempty"`
-	Required    bool              `json:"required,omitempty"`
+	Description string                       `json:"description,omitempty"`
+	Content     map[string]map[string]Schema `json:"content,omitempty"`
+	Required    bool                         `json:"required,omitempty"`
 }

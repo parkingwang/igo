@@ -18,7 +18,7 @@ log.addSource = false
 
 # web服务地址
 addr = "0.0.0.0:8082"
-# 日常输出请求参数
+# 日志输出请求参数
 dumpRequest = true
 
 
