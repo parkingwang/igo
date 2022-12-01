@@ -11,6 +11,7 @@ import (
 
 var testClient = MustClient(Option{
 	ParseResponse: func(r *http.Response, a any) error {
+		defer r.Body.Close()
 		dec := json.NewDecoder(r.Body)
 		if r.StatusCode < 400 {
 			return dec.Decode(a)

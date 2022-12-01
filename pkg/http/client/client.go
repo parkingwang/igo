@@ -10,18 +10,21 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+
+	"github.com/sony/gobreaker"
 )
 
 type Client struct {
 	opt Option
+	// 熔断器
+	breaker *gobreaker.CircuitBreaker
 }
 
 type Option struct {
 	// 默认使用 http.DefaultClient
 	Client *http.Client
-	// 最大重试次数
-	MaxRetryCount int
 	// 解析相应 **必须包含**
+	// 无需手动response.Body.Close() 会自动调用
 	// func(res *http.Response, out any) error {
 	// 	  dec:=json.NewDecode(res.Body)
 	//    return dec.Decode(out)
@@ -32,6 +35,8 @@ type Option struct {
 	ModfityRequest func(*http.Request)
 	// 基础url
 	BaseURL string
+	// 熔断器配置
+	BreakerSetting *gobreaker.Settings
 }
 
 func NewClient(opt Option) (*Client, error) {
@@ -41,10 +46,11 @@ func NewClient(opt Option) (*Client, error) {
 	if opt.Client == nil {
 		opt.Client = http.DefaultClient
 	}
-	if opt.MaxRetryCount < 1 {
-		opt.MaxRetryCount = 1
+	client := &Client{opt: opt}
+	if opt.BreakerSetting != nil {
+		client.breaker = gobreaker.NewCircuitBreaker(*opt.BreakerSetting)
 	}
-	return &Client{opt: opt}, nil
+	return client, nil
 }
 
 func MustClient(opt Option) *Client {
@@ -63,40 +69,24 @@ func (c *Client) Do(r *http.Request, out any) error {
 	if c.opt.ModfityRequest != nil {
 		c.opt.ModfityRequest(r)
 	}
-	// do := func(r *http.Request) {
-
-	// }
-	var resp *http.Response
-	var err error
-	for i := 0; i < c.opt.MaxRetryCount; i++ {
-		// reset body
-		if r.Body != nil && r.GetBody != nil {
-			body, err := r.GetBody()
-			if err != nil {
-				return err
-			}
-			r.Body = body
-		}
-		resp, err = c.opt.Client.Do(r)
+	var response *http.Response
+	if c.breaker != nil {
+		ret, err := c.breaker.Execute(func() (interface{}, error) {
+			return c.opt.Client.Do(r)
+		})
 		if err != nil {
-			continue
-		} else {
-			// 小于 500 的无需重试
-			if resp.StatusCode < 500 {
-				break
-			} else {
-				if i == c.opt.MaxRetryCount-1 {
-					break
-				} else {
-					resp.Body.Close()
-				}
-			}
+			return err
+		}
+		response = ret.(*http.Response)
+	} else {
+		var err error
+		response, err = c.opt.Client.Do(r)
+		if err != nil {
+			return err
 		}
 	}
-	if err != nil {
-		return err
-	}
-	return c.opt.ParseResponse(resp, out)
+	defer response.Body.Close()
+	return c.opt.ParseResponse(response, out)
 }
 
 func (c *Client) Get(url string) *request {
