@@ -12,6 +12,7 @@ import (
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 	"github.com/parkingwang/igo/pkg/http/code"
 	"github.com/parkingwang/igo/pkg/http/web/oas"
 	"go.opentelemetry.io/otel"
@@ -95,6 +96,9 @@ func (s *Server) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// 关闭gin默认的校验
+	// 等待所有都读取完成后统一校验
+	binding.Validator = nil
 	slog.FromContext(ctx).Info("Starting HTTP server", slog.String("addr", s.opt.addr))
 	go s.httpsrv.Serve(l)
 	return nil
@@ -178,22 +182,30 @@ func handleWarpf(opt *option) Handler {
 			}
 		}
 
+		valider := validator.New()
+		valider.SetTagName("binding") // 兼容gin
+
 		return func(ctx *gin.Context) {
 			q := reflect.New(reqParamsType)
 			if reqParamsType != rtypEempty {
-				if err := checkReqParam(ctx, q.Interface(), tags); err != nil {
+				err := checkReqParam(ctx, q.Interface(), tags)
+				if opt.dumpRequestBody {
+					// 输出请求体
+					slog.Ctx(ctx).LogAttrs(
+						slog.InfoLevel,
+						"gin.dumpRequest",
+						slog.String("data", fmt.Sprintf("%+v", q.Elem())),
+					)
+				}
+				if err == nil {
+					err = valider.Struct(q.Interface())
+				}
+				if err != nil {
 					warpRender(opt, ctx, nil, code.NewBadRequestError(err))
 					return
 				}
 			}
-			if opt.dumpRequestBody {
-				// 输出请求体
-				slog.Ctx(ctx).LogAttrs(
-					slog.InfoLevel,
-					"gin.dumpRequest",
-					slog.String("data", fmt.Sprintf("%+v", q.Elem())),
-				)
-			}
+
 			ret := method.Call([]reflect.Value{reflect.ValueOf(ctx), q})
 			if e := ret[numOut-1].Interface(); e != nil {
 				warpRender(opt, ctx, nil, e.(error))
@@ -219,14 +231,11 @@ func checkReqParam(ctx *gin.Context, obj any, tags map[string]bool) error {
 			if err := ctx.ShouldBindQuery(obj); err != nil {
 				return err
 			}
-
-			goto checkuri
 		}
 	}
 	if err := ctx.ShouldBind(obj); err != nil {
 		return err
 	}
-checkuri:
 	// uri 优先级最高 放到最后防止被覆盖
 	if tags["uri"] {
 		if len(ctx.Params) > 0 {

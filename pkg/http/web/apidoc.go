@@ -2,7 +2,6 @@ package web
 
 import (
 	_ "embed"
-	"fmt"
 	"net/http"
 	"reflect"
 	"strings"
@@ -85,8 +84,6 @@ func toConveterRequest(root map[string]map[string]any, route routeInfo) {
 	if in != reqTypeEmpty {
 		parameters, bodytypes := toConveterParameters(route, in)
 		if len(parameters) > 0 {
-			fmt.Println(tp.Name(), parameters)
-
 			rp.Parameters = parameters
 		}
 		if len(bodytypes) > 0 {
