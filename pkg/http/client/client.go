@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -89,24 +90,37 @@ func (c *Client) Do(r *http.Request, out any) error {
 	return c.opt.ParseResponse(response, out)
 }
 
-func (c *Client) Get(url string) *request {
-	return c.create(http.MethodGet, url)
+func (c *Client) Get(url string, args ...any) Requester {
+	return c.create(http.MethodGet, url, args...)
 }
 
-func (c *Client) Post(url string) *request {
-	return c.create(http.MethodPost, url)
+func (c *Client) Post(url string, args ...any) Requester {
+	return c.create(http.MethodPost, url, args...)
 }
 
-func (c *Client) Put(url string) *request {
-	return c.create(http.MethodPut, url)
+func (c *Client) Put(url string, args ...any) Requester {
+	return c.create(http.MethodPut, url, args...)
 }
 
-func (c *Client) Patch(url string) *request {
-	return c.create(http.MethodPatch, url)
+func (c *Client) Patch(url string, args ...any) Requester {
+	return c.create(http.MethodPatch, url, args...)
 }
 
-func (c *Client) Delete(url string) *request {
-	return c.create(http.MethodDelete, url)
+func (c *Client) Delete(url string, args ...any) Requester {
+	return c.create(http.MethodDelete, url, args...)
+}
+
+func (c *Client) Create(method, url string, args ...any) Requester {
+	return c.create(method, url, args...)
+}
+
+type Requester interface {
+	Header(...string) Requester
+	// Body request body
+	// eq：string/[]bytes/io.Reader/url.Values/any(tojson)
+	Body(any) Requester
+	BuildRawContextRequest(context.Context) (*http.Request, error)
+	Do(context.Context, any) error
 }
 
 type request struct {
@@ -123,16 +137,16 @@ var requestPool = sync.Pool{
 	},
 }
 
-func (c *Client) create(method, uri string) *request {
+func (c *Client) create(method, uri string, args ...any) Requester {
 	req := requestPool.Get().(*request)
 	req.method = method
-	req.url = uri
+	req.url = fmt.Sprintf(uri, args...)
 	req.header = make(map[string]string)
 	req.m = c
 	return req
 }
 
-func (r *request) Header(kvs ...string) *request {
+func (r *request) Header(kvs ...string) Requester {
 	if len(kvs)/2 != 0 {
 		kvs = append(kvs, "")
 	}
@@ -145,9 +159,22 @@ func (r *request) Header(kvs ...string) *request {
 	return r
 }
 
+// BuildRawContextRequest 构建原始http.Request
+func (r *request) BuildRawContextRequest(ctx context.Context) (*http.Request, error) {
+	url := r.m.opt.BaseURL + r.url
+	req, err := http.NewRequestWithContext(ctx, r.method, url, r.body)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range r.header {
+		req.Header.Add(k, v)
+	}
+	return req, nil
+}
+
 // Body request body
 // eq：string/[]bytes/io.Reader/url.Values/any(tojson)
-func (r *request) Body(a any) *request {
+func (r *request) Body(a any) Requester {
 	if a == nil {
 		return r
 	}
@@ -178,8 +205,7 @@ func (r *request) Do(ctx context.Context, out any) error {
 		r.m = nil
 		requestPool.Put(r)
 	}()
-	url := r.m.opt.BaseURL + r.url
-	req, err := http.NewRequestWithContext(ctx, r.method, url, r.body)
+	req, err := r.BuildRawContextRequest(ctx)
 	if err != nil {
 		return err
 	}

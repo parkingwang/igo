@@ -153,20 +153,7 @@ func checkHandleValid(tp reflect.Type) (int, bool) {
 	}
 }
 
-func shouldBind(ctx *gin.Context, obj any) error {
-	contentType := ctx.ContentType()
-	method := ctx.Request.Method
-	// 如果未没有指定contentType则按json
-	// 否则bind会失效
-	switch method {
-	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-		if contentType == "" {
-			contentType = binding.MIMEJSON
-		}
-	}
-	b := binding.Default(method, contentType)
-	return ctx.ShouldBindWith(obj, b)
-}
+var autoBindTags = []string{"header", "json", "form", "uri"}
 
 func handleWarpf(opt *option) Handler {
 	return func(iface any) gin.HandlerFunc {
@@ -178,10 +165,21 @@ func handleWarpf(opt *option) Handler {
 		method := reflect.ValueOf(iface)
 		reqParamsType := tp.In(1).Elem()
 
+		tags := make(map[string]bool)
+
+		for i := 0; i < reqParamsType.NumField(); i++ {
+			tag := reqParamsType.Field(i).Tag
+			for _, v := range autoBindTags {
+				if _, ok := tag.Lookup(v); ok {
+					tags[v] = true
+				}
+			}
+		}
+
 		return func(ctx *gin.Context) {
 			q := reflect.New(reqParamsType)
 			if reqParamsType != rtypEempty {
-				if err := checkReqParam(ctx, q.Interface()); err != nil {
+				if err := checkReqParam(ctx, q.Interface(), tags); err != nil {
 					warpRender(opt, ctx, nil, code.NewBadRequestError(err))
 					return
 				}
@@ -206,20 +204,31 @@ func handleWarpf(opt *option) Handler {
 	}
 }
 
-func checkReqParam(ctx *gin.Context, obj any) error {
-	if err := shouldBind(ctx, obj); err != nil {
-		return err
-	}
-	if len(ctx.Params) > 0 {
-		if err := ctx.ShouldBindUri(obj); err != nil {
+func checkReqParam(ctx *gin.Context, obj any, tags map[string]bool) error {
+	if tags["header"] {
+		if err := ctx.ShouldBindHeader(obj); err != nil {
 			return err
 		}
 	}
-	return nil
+	if tags["uri"] {
+		if len(ctx.Params) > 0 {
+			if err := ctx.ShouldBindUri(obj); err != nil {
+				return err
+			}
+		}
+	}
+	// 这里需要特殊处理 因为 query使用form的字段 并且只能在GET的时候用
+	// 当请求时json时 又由query绑定的tag:form将会失效
+	if (ctx.Request.Method != http.MethodGet) && (ctx.ContentType() == binding.MIMEJSON) {
+		if tags["form"] {
+			return ctx.ShouldBindQuery(obj)
+		}
+	}
+	return ctx.ShouldBind(obj)
 }
 
 func middleware(service string, opts ...Option) gin.HandlerFunc {
-	tracer := otel.GetTracerProvider().Tracer("github.com/parkingwang/igo/pkg/router")
+	tracer := otel.GetTracerProvider().Tracer("github.com/parkingwang/igo/pkg/http/web")
 	txtpropagator := otel.GetTextMapPropagator()
 	return func(c *gin.Context) {
 		savedCtx := c.Request.Context()
