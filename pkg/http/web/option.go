@@ -1,6 +1,9 @@
 package web
 
-import "github.com/parkingwang/igo/pkg/http/web/oas"
+import (
+	"github.com/go-playground/validator/v10"
+	"github.com/parkingwang/igo/pkg/http/web/oas"
+)
 
 type option struct {
 	render          Renderer
@@ -8,13 +11,17 @@ type option struct {
 	addr            string
 	routes          Routes
 	docInfo         *oas.DocInfo
+	bind            *validator.Validate
 }
 
 func defaultOption() *option {
+	v := validator.New()
+	v.SetTagName("binding") // 兼容gin
 	return &option{
 		addr:   ":8080",
 		render: DefaultRender,
 		routes: make([]*routeInfo, 0),
+		bind:   v,
 	}
 }
 

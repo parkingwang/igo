@@ -100,8 +100,13 @@ var userlist = []UserInfo{
 	{4, "jack"},
 }
 
+type Content struct {
+	ID int `uri:"id" form:"id" binding:"required" comment:"用户id"`
+}
+
 type UserIDReq struct {
-	ID int `uri:"id" binding:"required" comment:"用户id"`
+	Content
+	Comment string `form:"comment"`
 }
 
 // GetUser 获取单个用户

@@ -12,7 +12,6 @@ import (
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
-	"github.com/go-playground/validator/v10"
 	"github.com/parkingwang/igo/pkg/http/code"
 	"github.com/parkingwang/igo/pkg/http/web/oas"
 	"go.opentelemetry.io/otel"
@@ -159,8 +158,6 @@ func checkHandleValid(tp reflect.Type) (int, bool) {
 	}
 }
 
-var autoBindTags = []string{"header", "json", "form", "uri"}
-
 func handleWarpf(opt *option) Handler {
 	return func(iface any) gin.HandlerFunc {
 		tp := reflect.TypeOf(iface)
@@ -168,44 +165,32 @@ func handleWarpf(opt *option) Handler {
 		if !ok {
 			panic(errHandleType)
 		}
-		method := reflect.ValueOf(iface)
-		reqParamsType := tp.In(1).Elem()
-
-		tags := make(map[string]bool)
-
-		for i := 0; i < reqParamsType.NumField(); i++ {
-			tag := reqParamsType.Field(i).Tag
-			for _, v := range autoBindTags {
-				if _, ok := tag.Lookup(v); ok {
-					tags[v] = true
-				}
-			}
-		}
-
-		valider := validator.New()
-		valider.SetTagName("binding") // 兼容gin
-
+		var (
+			method        = reflect.ValueOf(iface)
+			reqParamsType = tp.In(1).Elem()
+			tags          = make(map[string]bool)
+		)
+		deepfindTags(reqParamsType, tags)
 		return func(ctx *gin.Context) {
 			q := reflect.New(reqParamsType)
 			if reqParamsType != rtypEempty {
-				err := checkReqParam(ctx, q.Interface(), tags)
+				qinface := q.Interface()
+				err := checkReqParam(ctx, qinface, tags)
+				// 输出请求体
 				if opt.dumpRequestBody {
-					// 输出请求体
-					slog.Ctx(ctx).LogAttrs(
-						slog.InfoLevel,
-						"gin.dumpRequest",
+					slog.Ctx(ctx).LogAttrs(slog.InfoLevel, "gin.dumpRequest",
 						slog.String("data", fmt.Sprintf("%+v", q.Elem())),
 					)
 				}
 				if err == nil {
-					err = valider.Struct(q.Interface())
+					err = opt.bind.Struct(qinface)
 				}
 				if err != nil {
 					warpRender(opt, ctx, nil, code.NewBadRequestError(err))
 					return
 				}
 			}
-
+			// 反射调用真实的函数
 			ret := method.Call([]reflect.Value{reflect.ValueOf(ctx), q})
 			if e := ret[numOut-1].Interface(); e != nil {
 				warpRender(opt, ctx, nil, e.(error))
@@ -216,36 +201,6 @@ func handleWarpf(opt *option) Handler {
 			}
 		}
 	}
-}
-
-func checkReqParam(ctx *gin.Context, obj any, tags map[string]bool) error {
-	if tags["header"] {
-		if err := ctx.ShouldBindHeader(obj); err != nil {
-			return err
-		}
-	}
-	// 这里需要特殊处理 因为 query使用form的字段 并且只能在GET的时候用
-	// 当请求时json时 又由query绑定的tag:form将会失效
-	if (ctx.Request.Method != http.MethodGet) && (ctx.ContentType() == binding.MIMEJSON) {
-		if tags["form"] {
-			if err := ctx.ShouldBindQuery(obj); err != nil {
-				return err
-			}
-		}
-	}
-	if err := ctx.ShouldBind(obj); err != nil {
-		return err
-	}
-	// uri 优先级最高 放到最后防止被覆盖
-	if tags["uri"] {
-		if len(ctx.Params) > 0 {
-			if err := ctx.ShouldBindUri(obj); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }
 
 func middleware(service string, opts ...Option) gin.HandlerFunc {
