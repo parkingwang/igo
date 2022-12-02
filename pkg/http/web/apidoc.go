@@ -2,6 +2,7 @@ package web
 
 import (
 	_ "embed"
+	"fmt"
 	"net/http"
 	"reflect"
 	"strings"
@@ -84,6 +85,8 @@ func toConveterRequest(root map[string]map[string]any, route routeInfo) {
 	if in != reqTypeEmpty {
 		parameters, bodytypes := toConveterParameters(route, in)
 		if len(parameters) > 0 {
+			fmt.Println(tp.Name(), parameters)
+
 			rp.Parameters = parameters
 		}
 		if len(bodytypes) > 0 {
@@ -121,33 +124,32 @@ func toConveterParameters(route routeInfo, in reflect.Type) ([]any, []string) {
 			"description": field.Tag.Get("comment"),
 			"required":    (strings.Split(field.Tag.Get("binding"), ","))[0] == "required",
 		}
-		if (strings.Split(field.Tag.Get("binding"), ","))[0] == "required" {
-			item["required"] = true
-		}
 		if v, ok := field.Tag.Lookup("header"); ok {
 			item["name"] = v
 			item["in"] = "header"
 			item["schema"] = oas.Generate(reflect.New(field.Type), "header")["schema"]
-			list = append(list, item)
 		}
-		if v, ok := field.Tag.Lookup("uri"); ok {
-			item["name"] = v
-			item["in"] = "path"
-			item["required"] = true
-			item["schema"] = oas.Generate(reflect.New(field.Type), "uri")["schema"]
-			list = append(list, item)
-		}
+
 		if v, ok := field.Tag.Lookup("form"); ok {
 			// 非get 方法 form 会解析为表单
 			if route.method == http.MethodGet {
 				item["name"] = v
 				item["in"] = "query"
 				item["schema"] = oas.Generate(reflect.New(field.Type), "form")["schema"]
-				list = append(list, item)
 			} else {
 				bodyType["form"] = struct{}{}
-
 			}
+		}
+
+		if v, ok := field.Tag.Lookup("uri"); ok {
+			item["name"] = v
+			item["in"] = "path"
+			item["required"] = true
+			item["schema"] = oas.Generate(reflect.New(field.Type), "uri")["schema"]
+		}
+
+		if item["in"] != nil {
+			list = append(list, item)
 		}
 
 		if _, ok := field.Tag.Lookup("json"); ok {
@@ -158,6 +160,7 @@ func toConveterParameters(route routeInfo, in reflect.Type) ([]any, []string) {
 	for k := range bodyType {
 		bodyTypes = append(bodyTypes, k)
 	}
+
 	return list, bodyTypes
 }
 

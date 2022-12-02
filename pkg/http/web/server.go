@@ -212,6 +212,22 @@ func checkReqParam(ctx *gin.Context, obj any, tags map[string]bool) error {
 			return err
 		}
 	}
+	// 这里需要特殊处理 因为 query使用form的字段 并且只能在GET的时候用
+	// 当请求时json时 又由query绑定的tag:form将会失效
+	if (ctx.Request.Method != http.MethodGet) && (ctx.ContentType() == binding.MIMEJSON) {
+		if tags["form"] {
+			if err := ctx.ShouldBindQuery(obj); err != nil {
+				return err
+			}
+
+			goto checkuri
+		}
+	}
+	if err := ctx.ShouldBind(obj); err != nil {
+		return err
+	}
+checkuri:
+	// uri 优先级最高 放到最后防止被覆盖
 	if tags["uri"] {
 		if len(ctx.Params) > 0 {
 			if err := ctx.ShouldBindUri(obj); err != nil {
@@ -219,14 +235,8 @@ func checkReqParam(ctx *gin.Context, obj any, tags map[string]bool) error {
 			}
 		}
 	}
-	// 这里需要特殊处理 因为 query使用form的字段 并且只能在GET的时候用
-	// 当请求时json时 又由query绑定的tag:form将会失效
-	if (ctx.Request.Method != http.MethodGet) && (ctx.ContentType() == binding.MIMEJSON) {
-		if tags["form"] {
-			return ctx.ShouldBindQuery(obj)
-		}
-	}
-	return ctx.ShouldBind(obj)
+
+	return nil
 }
 
 func middleware(service string, opts ...Option) gin.HandlerFunc {
