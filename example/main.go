@@ -25,6 +25,8 @@ var info = igo.AppInfo{
 
 func main() {
 
+	igo.SetConfig("config.toml")
+
 	app := igo.New(info)
 
 	app.Provide(

@@ -157,15 +157,19 @@ func (app *Application) CreateWebServer() *web.Server {
 	if cfg == nil {
 		return web.New()
 	}
-	return web.New(
-		web.WithAddr(cfg.GetString("addr")),
-		web.WithDumpRequestBody(cfg.GetBool("dumpRequest")),
-		web.WithOpenAPI(oas.DocInfo{
+	var docinfo *oas.DocInfo
+	if cfg.GetBool("openapi") {
+		docinfo = &oas.DocInfo{
 			Title:          app.info.Name,
 			Description:    app.info.Description,
 			Version:        app.info.Version,
 			TermsOfService: "https://github.com/parkingwang/igo",
-		}),
+		}
+	}
+	return web.New(
+		web.WithAddr(cfg.GetString("addr")),
+		web.WithDumpRequestBody(cfg.GetBool("dumpRequest")),
+		web.WithOpenAPI(docinfo),
 	)
 }
 

@@ -1,7 +1,6 @@
 package igo
 
 import (
-	"flag"
 	"os"
 
 	"github.com/parkingwang/igo/internal/config"
@@ -10,11 +9,8 @@ import (
 
 var defaultConfig config.Provider
 
-func init() {
-	var cpath string
-	flag.StringVar(&cpath, "c", "config.toml", "配置文件路径")
-	flag.Parse()
-	c, err := config.LoadConfig(cpath)
+func SetConfig(path string) {
+	c, err := config.LoadConfig(path)
 	if err != nil {
 		slog.Error("load config failed", err)
 		os.Exit(1)

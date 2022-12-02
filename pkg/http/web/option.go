@@ -7,7 +7,7 @@ type option struct {
 	dumpRequestBody bool
 	addr            string
 	routes          Routes
-	docInfo         oas.DocInfo
+	docInfo         *oas.DocInfo
 }
 
 func defaultOption() *option {
@@ -40,7 +40,7 @@ func WithAddr(addr string) Option {
 	}
 }
 
-func WithOpenAPI(info oas.DocInfo) Option {
+func WithOpenAPI(info *oas.DocInfo) Option {
 	return func(o *option) {
 		o.docInfo = info
 	}

@@ -20,6 +20,7 @@ log.addSource = false
 addr = "0.0.0.0:8082"
 # 日志输出请求参数
 dumpRequest = true
+openapi = true
 
 
 

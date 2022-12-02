@@ -72,21 +72,23 @@ func New(opts ...Option) *Server {
 func (s *Server) Start(ctx context.Context) error {
 	s.opt.routes.echo()
 	{
-		docspec, err := s.opt.routes.ToDoc(s.opt.docInfo)
-		if err != nil {
-			slog.Error("build openapi3.0 failed", err)
-		}
-		e := s.GinEngine()
-		e.GET("/debug/doc", func(ctx *gin.Context) {
-			ctx.Header("Content-Type", "text/html")
-			ctx.Writer.Write(swaggerUIData)
-		})
-		e.GET("/debug/doc/swagger.json", func(ctx *gin.Context) {
-			docspec.Servers = []oas.Server{
-				{Url: "http://" + ctx.Request.Host},
+		if s.opt.docInfo != nil {
+			docspec, err := s.opt.routes.ToDoc(*s.opt.docInfo)
+			if err != nil {
+				slog.Error("build openapi3.0 failed", err)
 			}
-			ctx.IndentedJSON(http.StatusOK, docspec)
-		})
+			e := s.GinEngine()
+			e.GET("/debug/doc", func(ctx *gin.Context) {
+				ctx.Header("Content-Type", "text/html")
+				ctx.Writer.Write(swaggerUIData)
+			})
+			e.GET("/debug/doc/swagger.json", func(ctx *gin.Context) {
+				docspec.Servers = []oas.Server{
+					{Url: "http://" + ctx.Request.Host},
+				}
+				ctx.IndentedJSON(http.StatusOK, docspec)
+			})
+		}
 	}
 
 	l, err := net.Listen("tcp", s.opt.addr)
