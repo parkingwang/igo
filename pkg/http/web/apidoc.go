@@ -120,6 +120,14 @@ func toConveterParameters(route routeInfo, in reflect.Type) ([]any, []string) {
 	var list []any
 	for i := 0; i < in.NumField(); i++ {
 		field := in.Field(i)
+		if field.Anonymous {
+			embedfields, embedbodytypes := toConveterParameters(route, field.Type)
+			list = append(list, embedfields...)
+			for _, v := range embedbodytypes {
+				bodyType[v] = struct{}{}
+			}
+			continue
+		}
 		item := map[string]any{
 			"description": field.Tag.Get("comment"),
 			"required":    (strings.Split(field.Tag.Get("binding"), ","))[0] == "required",
