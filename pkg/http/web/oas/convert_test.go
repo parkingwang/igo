@@ -16,7 +16,8 @@ func TestParseDeep(t *testing.T) {
 
 	type s struct {
 		Emb
-		ID int64 `json:"id" comment:"id..."`
+		ID int64       `json:"id" comment:"id..."`
+		V  interface{} `json:"v" binding:"required" comment:"value"`
 	}
 
 	x := s{}

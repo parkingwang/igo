@@ -114,6 +114,10 @@ func parseDeep(v reflect.Value, name, tag string, out map[string]Schema) map[str
 		v3 := reflect.New(v.Type().Elem())
 		p.Properties = parseDeep(v3, "example", tag, p.Properties)
 		out[name] = p
+
+	case reflect.Interface:
+		p := Schema{Type: schemaTypeObject, Properties: map[string]Schema{}, Required: make([]string, 0)}
+		out[name] = p
 	}
 
 	return out
