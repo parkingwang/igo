@@ -174,20 +174,22 @@ func handleWarpf(opt *option) Handler {
 		return func(ctx *gin.Context) {
 			q := reflect.New(reqParamsType)
 			if reqParamsType != rtypEempty {
-				qinface := q.Interface()
-				err := checkReqParam(ctx, qinface, tags)
-				// 输出请求体
-				if opt.dumpRequestBody {
-					slog.Ctx(ctx).LogAttrs(slog.InfoLevel, "gin.dumpRequest",
-						slog.String("data", fmt.Sprintf("%+v", q.Elem())),
-					)
-				}
-				if err == nil {
-					err = opt.bind.Struct(qinface)
-				}
-				if err != nil {
-					warpRender(opt, ctx, nil, code.NewBadRequestError(err))
-					return
+				if skipBind := ctx.GetBool("_igo_skip_bind"); !skipBind {
+					qinface := q.Interface()
+					err := checkReqParam(ctx, qinface, tags)
+					// 输出请求体
+					if opt.dumpRequestBody {
+						slog.Ctx(ctx).LogAttrs(slog.InfoLevel, "gin.dumpRequest",
+							slog.String("data", fmt.Sprintf("%+v", q.Elem())),
+						)
+					}
+					if err == nil {
+						err = opt.bind.Struct(qinface)
+					}
+					if err != nil {
+						warpRender(opt, ctx, nil, code.NewBadRequestError(err))
+						return
+					}
 				}
 			}
 			// 反射调用真实的函数

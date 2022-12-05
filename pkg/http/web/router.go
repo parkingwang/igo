@@ -180,3 +180,9 @@ func (r *Routes) echo() {
 	}
 	w.Flush()
 }
+
+func SkipBindRequest() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		c.Set("_igo_skip_bind", true)
+	}
+}
