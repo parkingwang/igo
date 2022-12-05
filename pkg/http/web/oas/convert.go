@@ -61,18 +61,35 @@ func parseDeep(v reflect.Value, name, tag string, out map[string]Schema) map[str
 			p := Schema{Type: schemaTypeObject, Properties: map[string]Schema{}, Required: make([]string, 0)}
 			for i := 0; i < v.NumField(); i++ {
 				vtyp := v.Type().Field(i)
-				x, ok := vtyp.Tag.Lookup(tag)
-				if ok {
-					p.Properties = parseDeep(v.Field(i), x, tag, p.Properties)
-					// 是否有注释？
-					if comment := vtyp.Tag.Get("comment"); comment != "" {
-						p.Description = comment
+				if vtyp.Anonymous {
+					parseDeep(reflect.New(vtyp.Type), "_anonymous", tag, p.Properties)
+					xxx := p.Properties["_anonymous"]
+					for k, v := range xxx.Properties {
+						p.Properties[k] = v
 					}
-					// 是否必填？
-					if xc := strings.Split(vtyp.Tag.Get("binding"), ","); xc[0] == "required" {
-						p.Required = append(p.Required, x)
+					p.Required = append(p.Required, xxx.Required...)
+					delete(p.Properties, "_anonymous")
+				} else {
+					x, ok := vtyp.Tag.Lookup(tag)
+					if ok {
+						if x == "-" {
+							continue
+						}
+						p.Properties = parseDeep(v.Field(i), x, tag, p.Properties)
+						// 是否有注释？
+						if comment := vtyp.Tag.Get("comment"); comment != "" {
+							pp := p.Properties[x]
+							pp.Description = comment
+							p.Properties[x] = pp
+							// p.Description = comment
+						}
+						// 是否必填？
+						if xc := strings.Split(vtyp.Tag.Get("binding"), ","); xc[0] == "required" {
+							p.Required = append(p.Required, x)
+						}
 					}
 				}
+
 			}
 			if len(p.Properties) > 0 {
 				out[name] = p
