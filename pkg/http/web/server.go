@@ -174,22 +174,24 @@ func handleWarpf(opt *option) Handler {
 		return func(ctx *gin.Context) {
 			q := reflect.New(reqParamsType)
 			if reqParamsType != rtypEempty {
-				if skipBind := ctx.GetBool("_igo_skip_bind"); !skipBind {
-					qinface := q.Interface()
-					err := checkReqParam(ctx, qinface, tags)
-					// 输出请求体
-					if opt.dumpRequestBody {
-						slog.Ctx(ctx).LogAttrs(slog.InfoLevel, "gin.dumpRequest",
-							slog.String("data", fmt.Sprintf("%+v", q.Elem())),
-						)
-					}
-					if err == nil {
-						err = opt.bind.Struct(qinface)
-					}
-					if err != nil {
-						warpRender(opt, ctx, nil, code.NewBadRequestError(err))
-						return
-					}
+				var err error
+				qinface, ok := ctx.Get(custombindkey)
+				if ok {
+					q.Set(reflect.ValueOf(qinface))
+				} else {
+					qinface = q.Interface()
+					err = checkReqParam(ctx, qinface, tags)
+				}
+				// 输出请求体
+				if opt.dumpRequestBody {
+					slog.Ctx(ctx).LogAttrs(slog.InfoLevel, "gin.dumpRequest", slog.String("data", fmt.Sprintf("%+v", q.Elem())))
+				}
+				if err == nil {
+					err = opt.bind.Struct(qinface)
+				}
+				if err != nil {
+					warpRender(opt, ctx, nil, code.NewBadRequestError(err))
+					return
 				}
 			}
 			// 反射调用真实的函数
@@ -269,5 +271,20 @@ func middleware(service string, opts ...Option) gin.HandlerFunc {
 		}
 
 		log.LogAttrs(loglvl, "gin.access", logattrs...)
+	}
+}
+
+var custombindkey = "_igo_custom_bind"
+
+// CustomBindRequest 自定义绑定参数 注意不包含验证 验证还是会统一进行
+func CustomBindRequest[T any](v T, f func(c *gin.Context) T) func(c *gin.Context) {
+	retv := reflect.ValueOf(v)
+	ok := retv.Kind() == reflect.Ptr && retv.Elem().Kind() == reflect.Struct
+	if !ok {
+		panic("CustomBindRequest T 必须是结构体指针")
+	}
+	return func(c *gin.Context) {
+		ret := f(c)
+		c.Set(custombindkey, ret)
 	}
 }
