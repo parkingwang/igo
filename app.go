@@ -174,21 +174,23 @@ func (app *Application) CreateWebServer() *web.Server {
 }
 
 func initPkgStore() error {
-	storecfg := Conf().Child("store")
-	if storecfg.IsSet("database") {
-		cfg := make(map[string]database.Config)
-		if err := storecfg.Decode("database", &cfg); err != nil {
-			return err
+	if Conf().IsSet("store") {
+		storecfg := Conf().Child("store")
+		if storecfg.IsSet("database") {
+			cfg := make(map[string]database.Config)
+			if err := storecfg.Decode("database", &cfg); err != nil {
+				return err
+			}
+			return database.RegisterFromConfig(cfg)
 		}
-		return database.RegisterFromConfig(cfg)
-	}
 
-	if storecfg.IsSet("redis") {
-		cfg := make(map[string]redis.Config)
-		if err := storecfg.Decode("redis", &cfg); err != nil {
-			return err
+		if storecfg.IsSet("redis") {
+			cfg := make(map[string]redis.Config)
+			if err := storecfg.Decode("redis", &cfg); err != nil {
+				return err
+			}
+			return redis.RegisterFromConfig(cfg)
 		}
-		return redis.RegisterFromConfig(cfg)
 	}
 	return nil
 }

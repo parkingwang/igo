@@ -177,7 +177,7 @@ func handleWarpf(opt *option) Handler {
 				var err error
 				qinface, ok := ctx.Get(custombindkey)
 				if ok {
-					q.Set(reflect.ValueOf(qinface))
+					q.Elem().Set(reflect.ValueOf(qinface).Elem())
 				} else {
 					qinface = q.Interface()
 					err = checkReqParam(ctx, qinface, tags)
@@ -277,8 +277,9 @@ func middleware(service string, opts ...Option) gin.HandlerFunc {
 var custombindkey = "_igo_custom_bind"
 
 // CustomBindRequest 自定义绑定参数 注意不包含验证 验证还是会统一进行
-func CustomBindRequest[T any](v T, f func(c *gin.Context) T) func(c *gin.Context) {
-	retv := reflect.ValueOf(v)
+func CustomBindRequest[T any](f func(c *gin.Context) T) func(c *gin.Context) {
+	x := reflect.TypeOf(f)
+	retv := reflect.ValueOf(x.Out(0))
 	ok := retv.Kind() == reflect.Ptr && retv.Elem().Kind() == reflect.Struct
 	if !ok {
 		panic("CustomBindRequest T 必须是结构体指针")
