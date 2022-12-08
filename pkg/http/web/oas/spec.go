@@ -28,7 +28,7 @@ type Request struct {
 	Tags []string `json:"tags,omitempty"`
 	RequestComment
 	OperationID string          `json:"operationId"`
-	Parameters  []any           `json:"parameters,omitempty"`
+	Parameters  []Parameter     `json:"parameters,omitempty"`
 	RequestBody *Body           `json:"requestBody,omitempty"`
 	Responses   map[string]Body `json:"responses,omitempty"`
 }
@@ -38,6 +38,14 @@ type DocInfo struct {
 	Description    string `json:"description"`
 	Version        string `json:"version"`
 	TermsOfService string `json:"termsOfService"`
+}
+
+type Parameter struct {
+	Name        string `json:"name"`
+	In          string `json:"in"`
+	Description string `json:"description,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+	Schema      Schema `json:"schema"`
 }
 
 func NewSpec() *Spec {

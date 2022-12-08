@@ -73,9 +73,7 @@ func toConveterRequest(root map[string]map[string]any, route routeInfo) {
 			Summary: route.comment,
 		},
 		OperationID: createOperationID(route),
-		Responses: map[string]oas.Body{"200": {
-			Description: "Successful operation",
-		}},
+		Responses:   map[string]oas.Body{"200": {Description: "Successful operation"}},
 	}
 
 	tp := route.funType.Type()
@@ -112,9 +110,9 @@ func toConveterRequest(root map[string]map[string]any, route routeInfo) {
 	root[path] = w
 }
 
-func toConveterParameters(route routeInfo, in reflect.Type) ([]any, []string) {
+func toConveterParameters(route routeInfo, in reflect.Type) ([]oas.Parameter, []string) {
 	bodyType := map[string]struct{}{}
-	var list []any
+	var list []oas.Parameter
 	for i := 0; i < in.NumField(); i++ {
 		field := in.Field(i)
 		if field.Anonymous {
@@ -125,35 +123,49 @@ func toConveterParameters(route routeInfo, in reflect.Type) ([]any, []string) {
 			}
 			continue
 		}
-		item := map[string]any{
-			"description": field.Tag.Get("comment"),
-			"required":    (strings.Split(field.Tag.Get("binding"), ","))[0] == "required",
+		// item := map[string]any{
+		// 	"description": field.Tag.Get("comment"),
+		// 	"required":    (strings.Split(field.Tag.Get("binding"), ","))[0] == "required",
+		// }
+		item := oas.Parameter{
+			Description: field.Tag.Get("comment"),
+			Required:    (strings.Split(field.Tag.Get("binding"), ","))[0] == "required",
 		}
 		if v, ok := field.Tag.Lookup("header"); ok {
-			item["name"] = v
-			item["in"] = "header"
-			item["schema"] = oas.Generate(reflect.New(field.Type), "header")["schema"]
+			item.Name = v
+			item.In = "header"
+			item.Schema = oas.Generate(reflect.New(field.Type), "header")["schema"]
 		}
 
 		if v, ok := field.Tag.Lookup("form"); ok {
 			// 非get 方法 form 会解析为表单
 			if route.method == http.MethodGet {
-				item["name"] = v
-				item["in"] = "query"
-				item["schema"] = oas.Generate(reflect.New(field.Type), "form")["schema"]
+				item.Name = v
+				item.In = "query"
+				item.Schema = oas.Generate(reflect.New(field.Type), "form")["schema"]
 			} else {
 				bodyType["form"] = struct{}{}
 			}
 		}
 
 		if v, ok := field.Tag.Lookup("uri"); ok {
-			item["name"] = v
-			item["in"] = "path"
-			item["required"] = true
-			item["schema"] = oas.Generate(reflect.New(field.Type), "uri")["schema"]
+			var has bool
+			p := strings.Split(route.basePath+route.basePath, "/")
+			for _, part := range p {
+				if v == ":"+part {
+					has = true
+					break
+				}
+			}
+			if has {
+				item.Name = v
+				item.In = "path"
+				item.Required = true
+				item.Schema = oas.Generate(reflect.New(field.Type), "uri")["schema"]
+			}
 		}
 
-		if item["in"] != nil {
+		if item.In != "" {
 			list = append(list, item)
 		}
 
