@@ -8,17 +8,13 @@ import (
 
 	"github.com/rabbitmq/amqp091-go"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slog"
 )
 
 type Consumer struct {
-	handle map[string]MessageHandle
-	opt    *option
-	clt    *client
+	// handle map[string]MessageHandle
+	opt *option
+	clt *client
 }
 
 func NewConsumer(opts ...Option) *Consumer {
@@ -27,30 +23,30 @@ func NewConsumer(opts ...Option) *Consumer {
 		v(opt)
 	}
 	return &Consumer{
-		opt:    opt,
-		handle: make(map[string]MessageHandle),
+		opt: opt,
+		// handle: make(map[string]MessageHandle),
 	}
 
 }
 
-func (s *Consumer) Subcrite(queue string, h MessageHandle) {
-	if _, ok := s.handle[queue]; ok {
-		slog.Warn("amqp handle alreay used", "queue", queue)
-	}
-	s.handle[queue] = func(ctx context.Context, msg amqp091.Delivery) {
-		ctx, span := s.opt.tracker.Start(ctx, "amqp.consumer",
-			trace.WithSpanKind(trace.SpanKindConsumer),
-			trace.WithAttributes(attribute.String("queue", queue)),
-		)
-		defer func() {
-			if e := recover(); e != nil {
-				span.SetStatus(codes.Error, fmt.Sprintf("panic %v", e))
-			}
-			span.End()
-		}()
-		h(ctx, msg)
-	}
-}
+// func (s *Consumer) Subcrite(queue string, h MessageHandle) {
+// 	if _, ok := s.handle[queue]; ok {
+// 		slog.Warn("amqp handle alreay used", "queue", queue)
+// 	}
+// 	s.handle[queue] = func(ctx context.Context, msg amqp091.Delivery) {
+// 		ctx, span := s.opt.tracker.Start(ctx, "amqp.consumer",
+// 			trace.WithSpanKind(trace.SpanKindConsumer),
+// 			trace.WithAttributes(attribute.String("queue", queue)),
+// 		)
+// 		defer func() {
+// 			if e := recover(); e != nil {
+// 				span.SetStatus(codes.Error, fmt.Sprintf("panic %v", e))
+// 			}
+// 			span.End()
+// 		}()
+// 		h(ctx, msg)
+// 	}
+// }
 
 func (s *Consumer) do(ctx context.Context, sess *Session, serr error) bool {
 	if serr != nil {

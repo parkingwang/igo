@@ -2,6 +2,9 @@ package amqp
 
 import (
 	"context"
+	"fmt"
+	"net"
+	"time"
 
 	"github.com/rabbitmq/amqp091-go"
 )
@@ -30,7 +33,11 @@ type Session struct {
 type MessageHandle func(ctx context.Context, msg amqp091.Delivery)
 
 func (c *client) getSession() (*Session, error) {
-	conn, err := amqp091.Dial(c.dsn)
+	conn, err := amqp091.DialConfig(c.dsn, amqp091.Config{
+		Heartbeat: time.Second * 10,
+		Dial: func(network, addr string) (net.Conn, error) {
+			return net.DialTimeout(network, addr, time.Second*5)
+		}})
 	if err != nil {
 		return nil, err
 	}
@@ -47,6 +54,7 @@ type loopHandle func(context.Context, *Session, error) bool
 func (c *client) runloop(f loopHandle) error {
 	for {
 		sess, err := c.getSession()
+		fmt.Println(err)
 		if next := f(c.baseCtx, sess, err); !next {
 			return nil
 		}
@@ -77,7 +85,7 @@ func queueDeclare(ch *amqp091.Channel, qs ...QueueOption) error {
 		}
 		for _, v := range x.BindExchange {
 			if err := ch.QueueBind(
-				x.Queue, v.Exchange, v.RoutingKey, false, nil,
+				x.Queue, v.RoutingKey, v.Exchange, false, nil,
 			); err != nil {
 				return err
 			}

@@ -22,8 +22,10 @@ func NewProducer(ctx context.Context, opts ...Option) *Producer {
 	for _, v := range opts {
 		v(opt)
 	}
-
-	p := &Producer{msg: make(chan *pubChanData, 1024)}
+	p := &Producer{
+		msg: make(chan *pubChanData, 1024),
+		opt: opt,
+	}
 	p.clt = newClient(ctx, opt.dsn)
 	go p.clt.runloop(
 		p.loopHandle,
