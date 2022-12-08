@@ -72,7 +72,8 @@ func parseDeep(v reflect.Value, name, tag string, out map[string]Schema) map[str
 				} else {
 					x, ok := vtyp.Tag.Lookup(tag)
 					if ok {
-						if x == "-" {
+						x = strings.TrimSpace(strings.Split(x, ",")[0])
+						if x == "-" || x == "" {
 							continue
 						}
 						p.Properties = parseDeep(v.Field(i), x, tag, p.Properties)

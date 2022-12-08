@@ -25,8 +25,8 @@ type RequestComment struct {
 	Description string `json:"description,omitempty"`
 }
 type Request struct {
-	Tags []string `json:"tags,omitempty"`
 	RequestComment
+	Tags        []string        `json:"tags,omitempty"`
 	OperationID string          `json:"operationId"`
 	Parameters  []Parameter     `json:"parameters,omitempty"`
 	RequestBody *Body           `json:"requestBody,omitempty"`
