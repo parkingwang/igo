@@ -3,7 +3,6 @@ package amqp
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/rabbitmq/amqp091-go"
@@ -12,10 +11,12 @@ import (
 )
 
 type Consumer struct {
-	// handle map[string]MessageHandle
-	opt *option
-	clt *client
+	opt    *option
+	cancel context.CancelFunc
 }
+
+// MessageHandle ding
+type MessageHandle func(ctx context.Context, msg amqp091.Delivery)
 
 func NewConsumer(opts ...Option) *Consumer {
 	opt := defaultOption()
@@ -24,62 +25,55 @@ func NewConsumer(opts ...Option) *Consumer {
 	}
 	return &Consumer{
 		opt: opt,
-		// handle: make(map[string]MessageHandle),
 	}
 
 }
 
-// func (s *Consumer) Subcrite(queue string, h MessageHandle) {
-// 	if _, ok := s.handle[queue]; ok {
-// 		slog.Warn("amqp handle alreay used", "queue", queue)
-// 	}
-// 	s.handle[queue] = func(ctx context.Context, msg amqp091.Delivery) {
-// 		ctx, span := s.opt.tracker.Start(ctx, "amqp.consumer",
-// 			trace.WithSpanKind(trace.SpanKindConsumer),
-// 			trace.WithAttributes(attribute.String("queue", queue)),
-// 		)
-// 		defer func() {
-// 			if e := recover(); e != nil {
-// 				span.SetStatus(codes.Error, fmt.Sprintf("panic %v", e))
-// 			}
-// 			span.End()
-// 		}()
-// 		h(ctx, msg)
-// 	}
-// }
-
-func (s *Consumer) do(ctx context.Context, sess *Session, serr error) bool {
+func (s *Consumer) do(ctx context.Context, c *amqp091.Connection, serr error) bool {
 	if serr != nil {
 		s.opt.err(serr)
 		return true
 	}
-	if err := s.opt.apply(sess.ch); err != nil {
-		s.opt.err(err)
-		return true
-	}
 	subctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	consumerTag, _ := os.Hostname()
-	for qname, handle := range s.opt.messageHandle {
-		msgs, err := sess.ch.Consume(qname, consumerTag, false, false, false, false, nil)
+	var applyChannel bool
+
+	chs := make([]*amqp091.Channel, 0)
+	defer func() {
+		for _, v := range chs {
+			v.Close()
+		}
+	}()
+	for qname := range s.opt.messageHandle {
+		ch, err := c.Channel()
 		if err != nil {
 			s.opt.err(err)
 			return true
 		}
-		for i := 0; i < s.opt.messageHandleWorker; i++ {
-			go func(h MessageHandle) {
-				for msg := range msgs {
-					h(fromDelivery(msg), msg)
-				}
-				// 通知关闭session
-				// 以便其他handler也可以退出
-				cancel()
-			}(handle)
+		chs = append(chs, ch)
+		if !applyChannel {
+			if err := s.opt.apply(ch); err != nil {
+				s.opt.err(err)
+				return true
+			}
+			applyChannel = true
 		}
+		name := qname
+		msgs, err := ch.Consume(name, "", false, false, false, false, nil)
+		if err != nil {
+			s.opt.err(err)
+			return true
+		}
+		go func(h MessageHandle) {
+			for msg := range msgs {
+				h(fromDelivery(msg), msg)
+			}
+			// 以便其他handler也可以退出
+			cancel()
+		}(s.opt.messageHandle[name])
 	}
 	select {
 	case <-subctx.Done():
-		sess.ch.Close()
 		return true
 	case <-ctx.Done():
 		// 等待一会 让执行中的任务执行完
@@ -96,13 +90,31 @@ func (s *Consumer) Start(ctx context.Context) error {
 	if len(opt.messageHandle) == 0 {
 		return fmt.Errorf("messageHandle not found")
 	}
-	s.clt = newClient(ctx, opt.dsn)
-	go s.clt.runloop(s.do)
+
+	lifeCtx, cannel := context.WithCancel(context.Background())
+	s.cancel = cannel
+
+	conn, err := createConnection(ctx, opt.name, opt.dsn)
+	if err != nil {
+		return err
+	}
+	go func() {
+		for {
+			next := s.do(lifeCtx, conn, err)
+			if !next {
+				return
+			}
+			time.Sleep(time.Second * 10)
+			c, subcancel := context.WithTimeout(lifeCtx, time.Second*5)
+			conn, err = createConnection(c, opt.name, opt.dsn)
+			subcancel()
+		}
+	}()
 	return nil
 }
 
 func (s *Consumer) Stop(ctx context.Context) error {
-	s.clt.cancel()
+	s.cancel()
 	return nil
 }
 

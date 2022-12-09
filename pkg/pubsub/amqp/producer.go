@@ -2,7 +2,8 @@ package amqp
 
 import (
 	"context"
-	"errors"
+	"sync/atomic"
+	"time"
 
 	"github.com/rabbitmq/amqp091-go"
 	"go.opentelemetry.io/otel"
@@ -12,72 +13,65 @@ import (
 )
 
 type Producer struct {
-	msg chan *pubChanData
 	opt *option
-	clt *client
+
+	conn *amqp091.Connection
+	ch   *amqp091.Channel
+
+	tryCnnection atomic.Bool
+	closed       atomic.Bool
 }
 
-func NewProducer(ctx context.Context, opts ...Option) *Producer {
+func NewProducer(ctx context.Context, opts ...Option) (*Producer, error) {
 	opt := defaultOption()
 	for _, v := range opts {
 		v(opt)
 	}
-	p := &Producer{
-		msg: make(chan *pubChanData, 1024),
-		opt: opt,
+	p := &Producer{opt: opt}
+	if err := p.createConnChannel(ctx); err != nil {
+		return nil, err
 	}
-	p.clt = newClient(ctx, opt.dsn)
-	go p.clt.runloop(
-		p.loopHandle,
-	)
-	return p
+	return p, nil
 }
 
-func (p *Producer) Close() error {
-	p.clt.cancel()
+func (p *Producer) createConnChannel(ctx context.Context) error {
+	if p.closed.Load() {
+		return amqp091.ErrClosed
+	}
+	if p.tryCnnection.CompareAndSwap(false, true) {
+		defer p.tryCnnection.Store(false)
+		if p.ch != nil {
+			p.ch.Close()
+			p.conn.Close()
+		}
+		conn, err := createConnection(ctx, p.opt.name, p.opt.dsn)
+		if err != nil {
+			p.opt.err(err)
+			time.Sleep(time.Second * 2)
+			return err
+		}
+		ch, err := conn.Channel()
+		if err != nil {
+			conn.Close()
+			p.opt.err(err)
+			return err
+		}
+		p.conn = conn
+		p.ch = ch
+
+		if err := p.opt.apply(ch); err != nil {
+			p.opt.err(err)
+		}
+	}
 	return nil
 }
 
-func (p *Producer) loopHandle(ctx context.Context, sess *Session, serr error) bool {
-	if serr != nil {
-		p.opt.err(serr)
-		return true
+func (p *Producer) Close() error {
+	p.closed.Store(true)
+	if p.conn != nil {
+		return p.conn.Close()
 	}
-	if err := p.opt.apply(sess.ch); err != nil {
-		p.opt.err(err)
-		return true
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			// wait 消息发送完
-			// 消息消费完再退出
-			close(p.msg)
-			return false
-		case msg, ok := <-p.msg:
-			if !ok {
-				return true
-			}
-			err := sess.ch.PublishWithContext(
-				msg.ctx, msg.exchange, msg.key, false, false, msg.data,
-			)
-			msg.errchan <- err
-			if err != nil {
-				if errors.Is(err, amqp091.ErrClosed) {
-					return true
-				}
-			}
-		}
-	}
-}
-
-type pubChanData struct {
-	ctx      context.Context
-	exchange string
-	key      string
-	data     amqp091.Publishing
-	errchan  chan error
+	return nil
 }
 
 func (p *Producer) PublishMsg(ctx context.Context, exchange, key string, msg amqp091.Publishing) error {
@@ -96,30 +90,18 @@ func (p *Producer) PublishMsg(ctx context.Context, exchange, key string, msg amq
 		msg.Headers[k] = v
 	}
 
-	errchan := make(chan error, 1)
-	defer close(errchan)
+	if p.tryCnnection.Load() {
+		return amqp091.ErrClosed
+	}
+	if err := p.ch.PublishWithContext(ctx, exchange, key, false, false, msg); err != nil {
+		if p.ch.IsClosed() {
+			return p.createConnChannel(ctx)
+		} else {
+			return err
+		}
+	}
+	return nil
 
-	m := &pubChanData{
-		ctx:      ctx,
-		exchange: exchange,
-		key:      key,
-		data:     msg,
-		errchan:  errchan,
-	}
-	p.msg <- m
-	select {
-	case <-ctx.Done():
-		err := ctx.Err()
-		if err != nil {
-			span.RecordError(err)
-		}
-		return err
-	case err := <-errchan:
-		if err != nil {
-			span.RecordError(err)
-		}
-		return err
-	}
 }
 
 func (p *Producer) Publish(ctx context.Context, exchange, key string, data []byte) error {

@@ -2,66 +2,23 @@ package amqp
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"time"
 
 	"github.com/rabbitmq/amqp091-go"
 )
 
-type client struct {
-	dsn     string
-	cancel  context.CancelFunc
-	baseCtx context.Context
-}
-
-func newClient(ctx context.Context, dsn string) *client {
-	subctx, cancel := context.WithCancel(ctx)
-	return &client{
-		dsn:     dsn,
-		baseCtx: subctx,
-		cancel:  cancel,
+func createConnection(ctx context.Context, name, dsn string) (*amqp091.Connection, error) {
+	config := amqp091.Config{
+		Properties: amqp091.NewConnectionProperties(),
 	}
-}
-
-type Session struct {
-	ch   *amqp091.Channel
-	conn *amqp091.Connection
-}
-
-// MessageHandle ding
-type MessageHandle func(ctx context.Context, msg amqp091.Delivery)
-
-func (c *client) getSession() (*Session, error) {
-	conn, err := amqp091.DialConfig(c.dsn, amqp091.Config{
-		Heartbeat: time.Second * 10,
-		Dial: func(network, addr string) (net.Conn, error) {
-			return net.DialTimeout(network, addr, time.Second*5)
-		}})
-	if err != nil {
-		return nil, err
+	config.Properties.SetClientConnectionName(name)
+	config.Heartbeat = time.Second * 10
+	config.Dial = func(network, addr string) (net.Conn, error) {
+		d := net.Dialer{}
+		return d.DialContext(ctx, network, addr)
 	}
-	ch, err := conn.Channel()
-	if err != nil {
-		conn.Close()
-		return nil, err
-	}
-	return &Session{ch, conn}, err
-}
-
-type loopHandle func(context.Context, *Session, error) bool
-
-func (c *client) runloop(f loopHandle) error {
-	for {
-		sess, err := c.getSession()
-		fmt.Println(err)
-		if next := f(c.baseCtx, sess, err); !next {
-			return nil
-		}
-		if err == nil {
-			sess.conn.Close()
-		}
-	}
+	return amqp091.DialConfig(dsn, config)
 }
 
 func exchangeDeclare(ch *amqp091.Channel, es ...ExchangeOption) error {
