@@ -37,13 +37,13 @@ func checkReqParam(ctx *gin.Context, obj any, tags map[string]bool) error {
 			return err
 		}
 	}
-	// 这里需要特殊处理 因为 query使用form的字段 并且只能在GET的时候用
-	// 当请求时json时 又由query绑定的tag:form将会失效
-	if (ctx.Request.Method != http.MethodGet) && (ctx.ContentType() == binding.MIMEJSON) {
-		if tags["form"] {
-			if err := ctx.ShouldBindQuery(obj); err != nil {
-				return err
-			}
+	// 这里需要特殊处理 因为 query使用form的字段 并且只能在GET的时候用 这里改为query
+	if tags["query"] {
+		// if err := ctx.ShouldBindQuery(obj); err != nil {
+		// 	return err
+		// }
+		if err := ctx.ShouldBindWith(obj, customQuerybind); err != nil {
+			return err
 		}
 	}
 	if err := ctx.ShouldBind(obj); err != nil {
@@ -56,4 +56,17 @@ func checkReqParam(ctx *gin.Context, obj any, tags map[string]bool) error {
 		}
 	}
 	return nil
+}
+
+var customQuerybind = queryBinding{}
+
+type queryBinding struct{}
+
+func (queryBinding) Name() string {
+	return "query"
+}
+
+func (queryBinding) Bind(req *http.Request, obj any) error {
+	values := req.URL.Query()
+	return binding.MapFormWithTag(obj, values, "query")
 }

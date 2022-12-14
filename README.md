@@ -83,6 +83,10 @@ func getUser(ctx context.Context, in *GetUserOption) (*UserInfo, error){
 
 和gin保持一致  可以绑定query，header，form表单，json请求体，url参数等
 
+> **query绑定 使用tag:jquery**
+> json gin默认使用form tag进行绑定且仅对get请求有效 为了更好的通用性 这里使用tag:query进行绑定
+
+
 验证则遵循 gin风格 
 
 ```go

@@ -44,6 +44,7 @@ func main() {
 		func(s *Something) igo.Servicer {
 			return &ticker{value: s.Value}
 		},
+
 		// web服务
 		func() igo.Servicer {
 			srv := app.CreateWebServer()
@@ -61,7 +62,13 @@ func initRoutes(srv *web.Server) {
 	user := r.Group("/user")
 	user.Comment("user object")
 	user.Get("/", middleGinHandler, ListUser)
-	user.Get("/:id", GetUser).Comment("测试用 id 可以是 1,2,3,4 试试换成不同的值看看")
+	user.Get("/:id", web.CustomBindRequest(func(c *gin.Context) *UserIDReq {
+		req := &UserIDReq{
+			Comment: "重写请求",
+		}
+		req.Content.ID = 1
+		return req
+	}), GetUser).Comment("测试用 id 可以是 1,2,3,4 试试换成不同的值看看")
 	user.Post("/:id/add", CreateUser)
 
 }
@@ -70,6 +77,7 @@ func initRoutes(srv *web.Server) {
 type UserInfo struct {
 	ID   int    `json:"id" uri:"id"`
 	Name string `json:"name" form:"name" comment:"备注再这里"`
+	X    string `query:"x"`
 }
 
 // UserInfoListResponse 用户信息列表
@@ -94,10 +102,10 @@ func ListUser(ctx context.Context, in *UserInfoListRequest) (*UserInfoListRespon
 }
 
 var userlist = []UserInfo{
-	{1, "afocus"},
-	{2, "umiko"},
-	{3, "tom"},
-	{4, "jack"},
+	{1, "afocus", ""},
+	{2, "umiko", ""},
+	{3, "tom", ""},
+	{4, "jack", ""},
 }
 
 type Content struct {

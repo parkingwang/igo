@@ -89,8 +89,13 @@ func toConveterRequest(root map[string]map[string]any, route routeInfo) {
 				Required: true,
 				Content:  make(map[string]map[string]oas.Schema),
 			}
+
 			for _, tag := range bodytypes {
-				body.Content[contentTypes[tag]] = oas.Generate(reflect.New(in), tag)
+				reqbody := oas.Generate(reflect.New(in), tag)
+				for _, v := range parameters {
+					delete(reqbody["schema"].Properties, v.Name)
+				}
+				body.Content[contentTypes[tag]] = reqbody
 			}
 			rp.RequestBody = body
 		}
@@ -137,26 +142,22 @@ func toConveterParameters(route routeInfo, in reflect.Type) ([]oas.Parameter, []
 			item.Schema = oas.Generate(reflect.New(field.Type), "header")["schema"]
 		}
 
-		if v, ok := field.Tag.Lookup("form"); ok {
-			// 非get 方法 form 会解析为表单
-			if route.method == http.MethodGet {
-				item.Name = v
-				item.In = "query"
-				item.Schema = oas.Generate(reflect.New(field.Type), "form")["schema"]
-			} else {
-				bodyType["form"] = struct{}{}
-			}
+		if v, ok := field.Tag.Lookup("query"); ok {
+			item.Name = v
+			item.In = "query"
+			item.Schema = oas.Generate(reflect.New(field.Type), "query")["schema"]
 		}
 
 		if v, ok := field.Tag.Lookup("uri"); ok {
 			var has bool
-			p := strings.Split(route.basePath+route.basePath, "/")
+			p := strings.Split(route.basePath+route.path, "/")
 			for _, part := range p {
-				if v == ":"+part {
+				if ":"+v == part {
 					has = true
 					break
 				}
 			}
+
 			if has {
 				item.Name = v
 				item.In = "path"
@@ -170,8 +171,18 @@ func toConveterParameters(route routeInfo, in reflect.Type) ([]oas.Parameter, []
 		}
 
 		if _, ok := field.Tag.Lookup("json"); ok {
-			bodyType["json"] = struct{}{}
+			if item.In == "" {
+				bodyType["json"] = struct{}{}
+			}
 		}
+		if _, ok := field.Tag.Lookup("form"); ok {
+			if route.method != http.MethodGet {
+				if item.In == "" {
+					bodyType["form"] = struct{}{}
+				}
+			}
+		}
+
 	}
 	bodyTypes := []string{}
 	for k := range bodyType {
