@@ -23,7 +23,7 @@ func NewTraceSlogHandler(w io.Writer, addSource bool, lvl slog.Leveler) slog.Han
 	opt := slog.HandlerOptions{
 		Level:     lvl,
 		AddSource: addSource,
-		ReplaceAttr: func(a slog.Attr) slog.Attr {
+		ReplaceAttr: func(g []string,a slog.Attr) slog.Attr {
 			if a.Key == slog.TimeKey {
 				return slog.String(
 					slog.TimeKey,

@@ -47,7 +47,7 @@ func New(opts ...Option) *Server {
 	e.Use(
 		middleware("apiservice"),
 		gin.CustomRecovery(func(c *gin.Context, err any) {
-			slog.Ctx(c).LogAttrs(slog.ErrorLevel, "gin.panic", slog.Any("err", err))
+			slog.Ctx(c).LogAttrs(slog.LevelError, "gin.panic", slog.Any("err", err))
 			c.Abort()
 			opt.render(c, nil,
 				code.NewCodeError(
@@ -184,7 +184,7 @@ func handleWarpf(opt *option) Handler {
 				}
 				// 输出请求体
 				if opt.dumpRequestBody {
-					slog.Ctx(ctx).LogAttrs(slog.InfoLevel, "gin.dumpRequest", slog.String("data", fmt.Sprintf("%+v", q.Elem())))
+					slog.Ctx(ctx).LogAttrs(slog.LevelInfo, "gin.dumpRequest", slog.String("data", fmt.Sprintf("%+v", q.Elem())))
 				}
 				if err == nil {
 					err = opt.bind.Struct(qinface)
@@ -247,7 +247,7 @@ func middleware(service string, opts ...Option) gin.HandlerFunc {
 		span.SetAttributes(attrs...)
 		span.SetStatus(spanStatus, spanMessage)
 
-		loglvl := slog.InfoLevel
+		loglvl := slog.LevelInfo
 		logattrs := []slog.Attr{
 			slog.String("method", c.Request.Method),
 			slog.String("path", path),
@@ -260,7 +260,7 @@ func middleware(service string, opts ...Option) gin.HandlerFunc {
 		if len(c.Errors) > 0 {
 			span.SetAttributes(attribute.String("gin.errors", c.Errors.String()))
 			span.SetStatus(codes.Error, c.Errors.String())
-			loglvl = slog.ErrorLevel
+			loglvl = slog.LevelError
 			logattrs = append(logattrs, slog.String("err", c.Errors.ByType(gin.ErrorTypePrivate).String()))
 		}
 

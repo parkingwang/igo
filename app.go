@@ -31,9 +31,9 @@ func New(info AppInfo) *Application {
 		cfg.GetBool("log.addSource"),
 		func() slog.Leveler {
 			if cfg.GetBool("log.debug") {
-				return slog.DebugLevel
+				return slog.LevelDebug
 			}
-			return slog.InfoLevel
+			return slog.LevelInfo
 		}(),
 	)))
 
