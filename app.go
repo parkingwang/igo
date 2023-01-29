@@ -181,7 +181,9 @@ func initPkgStore() error {
 			if err := storecfg.Decode("database", &cfg); err != nil {
 				return err
 			}
-			return database.RegisterFromConfig(cfg)
+			if err := database.RegisterFromConfig(cfg);err!=nil{
+				return err
+			}
 		}
 
 		if storecfg.IsSet("redis") {
