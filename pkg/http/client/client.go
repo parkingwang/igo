@@ -147,13 +147,13 @@ func (c *Client) create(method, uri string, args ...any) Requester {
 }
 
 func (r *request) Header(kvs ...string) Requester {
-	if len(kvs)/2 != 0 {
+	if len(kvs)%2 != 0 {
 		kvs = append(kvs, "")
 	}
 	if r.header == nil {
 		r.header = make(map[string]string)
 	}
-	for i := 0; i < len(kvs); i += 2 {
+	for i := 0; i < len(kvs)-1; i += 2 {
 		r.header[kvs[i]] = kvs[i+1]
 	}
 	return r
