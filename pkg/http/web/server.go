@@ -47,7 +47,7 @@ func New(opts ...Option) *Server {
 	e.Use(
 		middleware("apiservice"),
 		gin.CustomRecovery(func(c *gin.Context, err any) {
-			slog.Ctx(c).LogAttrs(slog.LevelError, "gin.panic", slog.Any("err", err))
+			slog.LogAttrs(c, slog.LevelError, "gin.panic", slog.Any("err", err))
 			c.Abort()
 			opt.render(c, nil,
 				code.NewCodeError(
@@ -98,13 +98,13 @@ func (s *Server) Start(ctx context.Context) error {
 	// 关闭gin默认的校验
 	// 等待所有都读取完成后统一校验
 	binding.Validator = nil
-	slog.FromContext(ctx).Info("Starting HTTP server", slog.String("addr", s.opt.addr))
+	slog.InfoCtx(ctx, "Starting HTTP server", slog.String("addr", s.opt.addr))
 	go s.httpsrv.Serve(l)
 	return nil
 }
 
 func (s *Server) Stop(ctx context.Context) error {
-	slog.FromContext(ctx).Info("Shutdown HTTP server", slog.String("addr", s.opt.addr))
+	slog.InfoCtx(ctx, "Shutdown HTTP server", slog.String("addr", s.opt.addr))
 	return s.httpsrv.Shutdown(ctx)
 }
 
@@ -184,7 +184,7 @@ func handleWarpf(opt *option) Handler {
 				}
 				// 输出请求体
 				if opt.dumpRequestBody {
-					slog.Ctx(ctx).LogAttrs(slog.LevelInfo, "gin.dumpRequest", slog.String("data", fmt.Sprintf("%+v", q.Elem())))
+					slog.LogAttrs(ctx, slog.LevelInfo, "gin.dumpRequest", slog.String("data", fmt.Sprintf("%+v", q.Elem())))
 				}
 				if err == nil {
 					err = opt.bind.Struct(qinface)
@@ -236,7 +236,7 @@ func middleware(service string, opts ...Option) gin.HandlerFunc {
 		ctx, span := tracer.Start(ctx, spanName, opts...)
 		defer span.End()
 
-		log := slog.Ctx(ctx)
+		// log := slog.Ctx(ctx)
 		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
@@ -270,7 +270,7 @@ func middleware(service string, opts ...Option) gin.HandlerFunc {
 			)
 		}
 
-		log.LogAttrs(loglvl, "gin.access", logattrs...)
+		slog.LogAttrs(ctx, loglvl, "gin.access", logattrs...)
 	}
 }
 

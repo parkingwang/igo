@@ -69,6 +69,7 @@ func initRoutes(srv *web.Server) {
 		req.Content.ID = 1
 		return req
 	}), GetUser).Comment("测试用 id 可以是 1,2,3,4 试试换成不同的值看看")
+
 	user.Post("/:id/add", CreateUser)
 
 }
@@ -93,10 +94,9 @@ type UserInfoListRequest struct {
 }
 
 func ListUser(ctx context.Context, in *UserInfoListRequest) (*UserInfoListResponse, error) {
-	log := slog.Ctx(ctx)
-	log.Info("get users", "count", len(userlist))
+	slog.InfoCtx(ctx, "get users", "count", len(userlist))
 	if v := ctx.Value("value"); v != nil {
-		log.Info("get middle value", "value", v)
+		slog.InfoCtx(ctx, "get middle value", "value", v)
 	}
 	return &UserInfoListResponse{Items: userlist}, nil
 }
@@ -144,12 +144,11 @@ func CreateUser(ctx context.Context, in *UserInfo) (*UserInfo, error) {
 
 // 一个gin风格的中间件
 func middleGinHandler(c *gin.Context) {
-	log := slog.Ctx(c)
 	// 传递值
 	c.Set("value", "123")
-	log.Info("start")
+	slog.InfoCtx(c, "start")
 	c.Next()
-	log.Info("end")
+	slog.InfoCtx(c, "end")
 }
 
 // ////////////////////
@@ -161,7 +160,7 @@ type ticker struct {
 }
 
 func (tk *ticker) Start(ctx context.Context) error {
-	log := slog.Ctx(ctx).With("type", "ticker")
+	log := slog.With("type", "ticker")
 	log.Info("start")
 	tk.log = log
 	tk.t = time.NewTicker(time.Second * 3)
@@ -169,7 +168,7 @@ func (tk *ticker) Start(ctx context.Context) error {
 	var i int
 	go func() {
 		for range tk.t.C {
-			log.Info(tk.value, "index", i)
+			log.InfoCtx(ctx, tk.value, "index", i)
 			i++
 		}
 	}()

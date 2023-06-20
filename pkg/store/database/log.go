@@ -25,7 +25,6 @@ func (l *tracelogger) Trace(ctx context.Context, begin time.Time, fc func() (str
 	if l.lvl <= logger.Silent {
 		return
 	}
-	log := slog.Ctx(ctx)
 	sql, rows := fc()
 	dur := time.Since(begin)
 	logattr := []any{
@@ -35,10 +34,10 @@ func (l *tracelogger) Trace(ctx context.Context, begin time.Time, fc func() (str
 	}
 	switch {
 	case err != nil && l.lvl >= logger.Error:
-		log.Error("gorm.trace", err, logattr...)
+		slog.ErrorCtx(ctx, "gorm.trace", append(logattr, slog.String("err", err.Error()))...)
 	case dur >= time.Millisecond*500 && l.lvl >= logger.Warn:
-		log.Warn("gorm.trace slow sql", logattr...)
+		slog.WarnCtx(ctx, "gorm.trace slow sql", logattr...)
 	case l.lvl == logger.Info:
-		log.Info("gorm.trace", logattr...)
+		slog.InfoCtx(ctx, "gorm.trace", logattr...)
 	}
 }

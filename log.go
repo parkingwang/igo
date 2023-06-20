@@ -1,6 +1,7 @@
 package igo
 
 import (
+	"context"
 	"io"
 
 	"go.opentelemetry.io/otel/trace"
@@ -23,7 +24,7 @@ func NewTraceSlogHandler(w io.Writer, addSource bool, lvl slog.Leveler) slog.Han
 	opt := slog.HandlerOptions{
 		Level:     lvl,
 		AddSource: addSource,
-		ReplaceAttr: func(g []string,a slog.Attr) slog.Attr {
+		ReplaceAttr: func(g []string, a slog.Attr) slog.Attr {
 			if a.Key == slog.TimeKey {
 				return slog.String(
 					slog.TimeKey,
@@ -31,15 +32,16 @@ func NewTraceSlogHandler(w io.Writer, addSource bool, lvl slog.Leveler) slog.Han
 				)
 			}
 			if _, ok := sets[a.Key]; ok {
-				if a.Value.Kind() == slog.StringKind {
+				if a.Value.Kind() == slog.KindString {
 					return slog.String(a.Key, replaceLogPrivacyAttrKey(a.Value.String()))
 				}
 			}
 			return a
 		},
 	}
+
 	return &logTraceHandle{
-		opt.NewTextHandler(w),
+		slog.NewTextHandler(w, &opt),
 	}
 }
 
@@ -63,10 +65,17 @@ type logTraceHandle struct {
 	*slog.TextHandler
 }
 
-func (h *logTraceHandle) Handle(r slog.Record) error {
-	span := trace.SpanContextFromContext(r.Context)
-	if span.IsValid() {
-		r.AddAttrs(slog.String("traceid", span.TraceID().String()))
+func (h *logTraceHandle) Handle(c context.Context, r slog.Record) error {
+	if id := GetTraceID(c); id != "" {
+		r.AddAttrs(slog.String("traceid", id))
 	}
-	return h.TextHandler.Handle(r)
+	return h.TextHandler.Handle(c, r)
+}
+
+func GetTraceID(c context.Context) string {
+	span := trace.SpanContextFromContext(c)
+	if span.IsValid() {
+		return span.TraceID().String()
+	}
+	return ""
 }

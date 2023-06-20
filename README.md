@@ -72,7 +72,7 @@ type UserInfo struct{
 // getUser 这里的注释会在文档中显示
 func getUser(ctx context.Context, in *GetUserOption) (*UserInfo, error){
     // 通过ctx 日志可以携带trace信息
-    slog.Ctx(ctx).Info("get user info", "id",in.ID)
+    slog.InfoCtx("get user info", "id",in.ID)
     // 通过codes.New 返回error
     return nil, codes.NewBadRequest("some err")
 }
@@ -129,8 +129,7 @@ func hello(ctx context.Context, in *structRequest) error {
 
 ```go
 func hello(ctx context.Context){
-    logger:=slog.Ctx(ctx)
-    logger.Info("msg。。。。", "field_key","field_value")
+    slog.InfoCtx(ctx,"msg。。。。", "field_key","field_value")
 }
 
 ```
