@@ -72,8 +72,8 @@ func (c *Client) Do(r *http.Request, out any) error {
 	}
 	var response *http.Response
 	if c.breaker != nil {
-		ret, err := c.breaker.Execute(func() (interface{}, error) {
-			return c.opt.Client.Do(r)
+		ret, err := c.breaker.Execute(func() (any, error) {
+			return c.opt.Client.Do(r) // nolint
 		})
 		if err != nil {
 			return err
@@ -81,7 +81,7 @@ func (c *Client) Do(r *http.Request, out any) error {
 		response = ret.(*http.Response)
 	} else {
 		var err error
-		response, err = c.opt.Client.Do(r)
+		response, err = c.opt.Client.Do(r) // nolint
 		if err != nil {
 			return err
 		}
