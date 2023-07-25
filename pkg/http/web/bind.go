@@ -14,20 +14,23 @@ func deepfindTags(t reflect.Type, m map[string]bool) {
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	if t.Kind() != reflect.Struct {
-		return
-	}
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if field.Anonymous {
-			deepfindTags(field.Type, m)
-			continue
-		}
-		for _, v := range autoBindTags {
-			if _, ok := field.Tag.Lookup(v); ok {
-				m[v] = true
+
+	switch t.Kind() {
+	case reflect.Struct:
+		for i := 0; i < t.NumField(); i++ {
+			field := t.Field(i)
+			if field.Anonymous {
+				deepfindTags(field.Type, m)
+				continue
+			}
+			for _, v := range autoBindTags {
+				if _, ok := field.Tag.Lookup(v); ok {
+					m[v] = true
+				}
 			}
 		}
+	case reflect.Slice:
+		deepfindTags(t.Elem(), m)
 	}
 }
 

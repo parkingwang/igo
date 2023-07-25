@@ -127,7 +127,7 @@ func GinContext(ctx context.Context) (*gin.Context, bool) {
 	return c, ok
 }
 
-var errHandleType = errors.New("rpc handle must func(ctx context.Context, in *struct)(out *struct,err error) type")
+var errHandleType = errors.New("rpc handle must func(ctx context.Context, in *struct/slice)(out any,err error) type")
 
 func checkHandleValid(tp reflect.Type) (int, bool) {
 	if tp.Kind() != reflect.Func {
@@ -138,7 +138,7 @@ func checkHandleValid(tp reflect.Type) (int, bool) {
 	if !(tp.NumIn() == 2 &&
 		rtypeContext.Implements(tp.In(0)) &&
 		tp.In(1).Kind() == reflect.Ptr &&
-		tp.In(1).Elem().Kind() == reflect.Struct) {
+		tp.In(1).Elem().Kind() == reflect.Struct || tp.In(1).Elem().Kind() == reflect.Slice) {
 		return 0, false
 	}
 
@@ -150,9 +150,7 @@ func checkHandleValid(tp reflect.Type) (int, bool) {
 	case 1:
 		return 1, rtypeError.Implements(tp.Out(0))
 	case 2:
-		return 2, rtypeError.Implements(tp.Out(1)) &&
-			tp.Out(0).Kind() == reflect.Ptr &&
-			tp.Out(0).Elem().Kind() == reflect.Struct
+		return 2, rtypeError.Implements(tp.Out(1))
 	default:
 		return n, false
 	}
