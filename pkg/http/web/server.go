@@ -137,8 +137,8 @@ func checkHandleValid(tp reflect.Type) (int, bool) {
 	// check request
 	if !(tp.NumIn() == 2 &&
 		rtypeContext.Implements(tp.In(0)) &&
-		tp.In(1).Kind() == reflect.Ptr &&
-		tp.In(1).Elem().Kind() == reflect.Struct || tp.In(1).Elem().Kind() == reflect.Slice) {
+		(tp.In(1).Kind() == reflect.Ptr &&
+			tp.In(1).Elem().Kind() == reflect.Struct) || tp.In(1).Elem().Kind() == reflect.Slice) {
 		return 0, false
 	}
 
