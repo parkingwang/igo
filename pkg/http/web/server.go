@@ -137,8 +137,7 @@ func checkHandleValid(tp reflect.Type) (int, bool) {
 	// check request
 	if !(tp.NumIn() == 2 &&
 		rtypeContext.Implements(tp.In(0)) &&
-		(tp.In(1).Kind() == reflect.Ptr &&
-			tp.In(1).Elem().Kind() == reflect.Struct) || tp.In(1).Elem().Kind() == reflect.Slice) {
+		((tp.In(1).Kind() == reflect.Ptr && tp.In(1).Elem().Kind() == reflect.Struct) || tp.In(1).Kind() == reflect.Slice)) {
 		return 0, false
 	}
 
@@ -165,16 +164,26 @@ func handleWarpf(opt *option) Handler {
 		}
 		var (
 			method        = reflect.ValueOf(iface)
-			reqParamsType = tp.In(1).Elem()
+			isSlice       = tp.In(1).Kind() != reflect.Ptr
 			tags          = make(map[string]bool)
+			reqParamsType reflect.Type
 		)
+
+		if !isSlice {
+			reqParamsType = tp.In(1).Elem()
+		} else {
+			reqParamsType = tp.In(1)
+		}
 		deepfindTags(reqParamsType, tags)
 		return func(ctx *gin.Context) {
 			q := reflect.New(reqParamsType)
+			if isSlice {
+				q.Elem().Set(reflect.MakeSlice(reqParamsType, 0, 0))
+			}
 			if reqParamsType != rtypEempty {
 				var err error
 				qinface, ok := ctx.Get(custombindkey)
-				if ok {
+				if ok && !isSlice {
 					q.Elem().Set(reflect.ValueOf(qinface).Elem())
 				} else {
 					qinface = q.Interface()
@@ -182,15 +191,18 @@ func handleWarpf(opt *option) Handler {
 				}
 				// 输出请求体
 				if opt.dumpRequestBody {
-					slog.LogAttrs(ctx, slog.LevelInfo, "gin.dumpRequest", slog.String("data", fmt.Sprintf("%+v", q.Elem())))
+					slog.LogAttrs(ctx, slog.LevelInfo, "gin.dumpRequest", slog.String("data", fmt.Sprintf("%+v", q)))
 				}
-				if err == nil {
+				if err == nil && !isSlice {
 					err = opt.bind.Struct(qinface)
 				}
 				if err != nil {
 					warpRender(opt, ctx, nil, code.NewBadRequestError(err))
 					return
 				}
+			}
+			if isSlice {
+				q = q.Elem()
 			}
 			// 反射调用真实的函数
 			ret := method.Call([]reflect.Value{reflect.ValueOf(ctx), q})

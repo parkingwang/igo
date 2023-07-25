@@ -30,7 +30,8 @@ func deepfindTags(t reflect.Type, m map[string]bool) {
 			}
 		}
 	case reflect.Slice:
-		deepfindTags(t.Elem(), m)
+		// deepfindTags(t.Elem(), m)
+		// m["json"] = true
 	}
 }
 

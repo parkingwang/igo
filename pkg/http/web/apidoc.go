@@ -77,29 +77,41 @@ func toConveterRequest(root map[string]map[string]any, route routeInfo) {
 	}
 
 	tp := route.funType.Type()
-	in := tp.In(1).Elem()
-	// 请求参数跳过web.Empty对象
-	if in != reqTypeEmpty {
-		parameters, bodytypes := toConveterParameters(route, in)
-		if len(parameters) > 0 {
-			rp.Parameters = parameters
-		}
-		if len(bodytypes) > 0 {
-			body := &oas.Body{
-				Required: true,
-				Content:  make(map[string]map[string]oas.Schema),
-			}
 
-			for _, tag := range bodytypes {
-				reqbody := oas.Generate(reflect.New(in), tag)
-				for _, v := range parameters {
-					delete(reqbody["schema"].Properties, v.Name)
-				}
-				body.Content[contentTypes[tag]] = reqbody
+	switch tp.Kind() {
+	case reflect.Ptr:
+		in := tp.In(1).Elem()
+		// 请求参数跳过web.Empty对象
+		if in != reqTypeEmpty {
+			parameters, bodytypes := toConveterParameters(route, in)
+			if len(parameters) > 0 {
+				rp.Parameters = parameters
 			}
-			rp.RequestBody = body
+			if len(bodytypes) > 0 {
+				body := &oas.Body{
+					Required: true,
+					Content:  make(map[string]map[string]oas.Schema),
+				}
+
+				for _, tag := range bodytypes {
+					reqbody := oas.Generate(reflect.New(in), tag)
+					for _, v := range parameters {
+						delete(reqbody["schema"].Properties, v.Name)
+					}
+					body.Content[contentTypes[tag]] = reqbody
+				}
+				rp.RequestBody = body
+			}
 		}
+	case reflect.Slice:
+		body := &oas.Body{
+			Required: true,
+			Content:  make(map[string]map[string]oas.Schema),
+		}
+		body.Content[contentTypes["json"]] = oas.Generate(reflect.New(tp.In(1)), "")
+		rp.RequestBody = body
 	}
+
 	if tp.NumOut() == 2 {
 		out := tp.Out(0).Elem()
 		const responseTag = "json"
@@ -118,6 +130,7 @@ func toConveterRequest(root map[string]map[string]any, route routeInfo) {
 func toConveterParameters(route routeInfo, in reflect.Type) ([]oas.Parameter, []string) {
 	bodyType := map[string]struct{}{}
 	var list []oas.Parameter
+
 	for i := 0; i < in.NumField(); i++ {
 		field := in.Field(i)
 		if field.Anonymous {
