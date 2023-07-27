@@ -152,7 +152,7 @@ type Servicer interface {
 	Stop(context.Context) error
 }
 
-func (app *Application) CreateWebServer() *web.Server {
+func (app *Application) CreateWebServer(opts ...web.Option) *web.Server {
 	cfg := Conf().Child("server.web")
 	if cfg == nil {
 		return web.New()
@@ -166,11 +166,15 @@ func (app *Application) CreateWebServer() *web.Server {
 			TermsOfService: "https://github.com/parkingwang/igo",
 		}
 	}
-	return web.New(
+
+	baseOpts := []web.Option{
 		web.WithAddr(cfg.GetString("addr")),
 		web.WithDumpRequestBody(cfg.GetBool("dumpRequest")),
 		web.WithOpenAPI(docinfo),
-	)
+	}
+
+	baseOpts = append(baseOpts, opts...)
+	return web.New(...baseOpts)
 }
 
 func initPkgStore() error {
