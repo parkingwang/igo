@@ -172,9 +172,7 @@ func (app *Application) CreateWebServer(opts ...web.Option) *web.Server {
 		web.WithDumpRequestBody(cfg.GetBool("dumpRequest")),
 		web.WithOpenAPI(docinfo),
 	}
-
-	baseOpts = append(baseOpts, opts...)
-	return web.New(...baseOpts)
+	return web.New(append(baseOpts, opts...)...)
 }
 
 func initPkgStore() error {
