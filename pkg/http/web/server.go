@@ -191,7 +191,7 @@ func handleWarpf(opt *option) Handler {
 				}
 				// 输出请求体
 				if opt.dumpRequestBody {
-					slog.LogAttrs(ctx, slog.LevelInfo, "gin.dumpRequest", slog.String("data", fmt.Sprintf("%+v", q)))
+					slog.LogAttrs(ctx, slog.LevelInfo, "gin.dumpRequest", slog.Any("data", q))
 				}
 				if err == nil && !isSlice {
 					err = opt.bind.Struct(qinface)
