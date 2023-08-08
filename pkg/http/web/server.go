@@ -212,6 +212,8 @@ func handleWarpf(opt *option) Handler {
 			}
 			if numOut == 2 {
 				warpRender(opt, ctx, ret[0].Interface(), nil)
+			} else {
+				warpRender(opt, ctx, nil, nil)
 			}
 		}
 	}
