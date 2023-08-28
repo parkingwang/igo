@@ -50,9 +50,16 @@ func checkReqParam(ctx *gin.Context, obj any, tags map[string]bool) error {
 			return err
 		}
 	}
-	if err := ctx.ShouldBind(obj); err != nil {
-		return err
+	if ctx.ContentType() == "" && tags["json"] {
+		if err := ctx.ShouldBindJSON(obj); err != nil {
+			return err
+		}
+	} else {
+		if err := ctx.ShouldBind(obj); err != nil {
+			return err
+		}
 	}
+
 	// uri 优先级最高 放到最后防止被覆盖
 	if len(ctx.Params) > 0 {
 		if err := ctx.ShouldBindUri(obj); err != nil {
