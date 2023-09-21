@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin/binding"
 )
 
-var autoBindTags = []string{"header", "json", "form", "uri"}
+var autoBindTags = []string{"header", "json", "form", "uri", "query"}
 
 func deepfindTags(t reflect.Type, m map[string]bool) {
 	if t.Kind() == reflect.Pointer {
