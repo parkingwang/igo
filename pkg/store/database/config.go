@@ -6,6 +6,7 @@ import (
 
 type Config struct {
 	Url             string
+	Driver          string
 	MaxOpenConns    int
 	MaxIdleConns    int
 	ConnMaxIdleTime time.Duration
@@ -16,6 +17,7 @@ func RegisterFromConfig(cfgs map[string]Config) error {
 		if err := RegisterByName(
 			name,
 			opt.Url,
+			opt.Driver,
 			WithMaxOpenConns(opt.MaxOpenConns),
 			WithMaxIdleConns(opt.MaxIdleConns),
 			WithConnMaxIdleTime(opt.ConnMaxIdleTime),
