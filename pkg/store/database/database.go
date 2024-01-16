@@ -6,28 +6,41 @@ import (
 	"time"
 
 	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/plugin/opentelemetry/tracing"
 )
 
 var dbs = make(map[string]*gorm.DB)
 
-const defaultName = "default"
+const (
+	defaultName    = "default"
+	DriverMysql    = "mysql"
+	DriverPostgres = "postgres"
+)
 
 // Register 注册默认数据库
 // 当只有一个数据库的时候推荐使用
-func Register(dsn string, opts ...Option) error {
-	return RegisterByName(defaultName, dsn, opts...)
+func Register(dsn, driver string, opts ...Option) error {
+	return RegisterByName(defaultName, dsn, driver, opts...)
 }
 
 // RegisterByName 按名称注册数据库
 // 适合同时需要操作多个数据库
-func RegisterByName(name, dsn string, opts ...Option) error {
+func RegisterByName(name, dsn, driver string, opts ...Option) error {
 	if _, ok := dbs[name]; ok {
 		return fmt.Errorf("db %s alreay register", name)
 	}
+	var dialect gorm.Dialector
+	switch driver {
+	case DriverPostgres:
+		postgres.Open(dsn)
+	default:
+		mysql.Open(dsn)
+	}
+
 	db, err := gorm.Open(
-		mysql.Open(dsn),
+		dialect,
 		&gorm.Config{Logger: &tracelogger{}},
 	)
 	if err != nil {

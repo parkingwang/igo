@@ -34,7 +34,9 @@
 [store.database]
 
 # 连接地址 必填
-# default.url = "admin:1234@tcp(127.0.0.1:3306)/mydb?charset=utf8" 
+# default.url = "admin:1234@tcp(127.0.0.1:3306)/mydb?charset=utf8"
+# 数据库类型，目前支持：mysql, postgres
+# default.driver = "mysql"
 # 最大连接数
 # default.maxOpenConns = 10
 # 最大空闲连接数
