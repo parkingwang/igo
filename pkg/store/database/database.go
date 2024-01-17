@@ -34,9 +34,9 @@ func RegisterByName(name, dsn, driver string, opts ...Option) error {
 	var dialect gorm.Dialector
 	switch driver {
 	case DriverPostgres:
-		postgres.Open(dsn)
+		dialect = postgres.Open(dsn)
 	default:
-		mysql.Open(dsn)
+		dialect = mysql.Open(dsn)
 	}
 
 	db, err := gorm.Open(
