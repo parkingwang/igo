@@ -6,11 +6,12 @@ import (
 	"net/http"
 	"time"
 
+	"log/slog"
+
 	"github.com/gin-gonic/gin"
 	"github.com/parkingwang/igo"
 	"github.com/parkingwang/igo/pkg/http/code"
 	"github.com/parkingwang/igo/pkg/http/web"
-	"golang.org/x/exp/slog"
 )
 
 // Something 你好
@@ -94,9 +95,9 @@ type UserInfoListRequest struct {
 }
 
 func ListUser(ctx context.Context, in *UserInfoListRequest) (*UserInfoListResponse, error) {
-	slog.InfoCtx(ctx, "get users", "count", len(userlist))
+	slog.InfoContext(ctx, "get users", "count", len(userlist))
 	if v := ctx.Value("value"); v != nil {
-		slog.InfoCtx(ctx, "get middle value", "value", v)
+		slog.InfoContext(ctx, "get middle value", "value", v)
 	}
 	return &UserInfoListResponse{Items: userlist}, nil
 }
@@ -146,9 +147,9 @@ func CreateUser(ctx context.Context, in *UserInfo) (*UserInfo, error) {
 func middleGinHandler(c *gin.Context) {
 	// 传递值
 	c.Set("value", "123")
-	slog.InfoCtx(c, "start")
+	slog.InfoContext(c, "start")
 	c.Next()
-	slog.InfoCtx(c, "end")
+	slog.InfoContext(c, "end")
 }
 
 // ////////////////////
@@ -168,7 +169,7 @@ func (tk *ticker) Start(ctx context.Context) error {
 	var i int
 	go func() {
 		for range tk.t.C {
-			log.InfoCtx(ctx, tk.value, "index", i)
+			log.InfoContext(ctx, tk.value, "index", i)
 			i++
 		}
 	}()

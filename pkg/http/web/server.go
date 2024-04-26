@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"time"
 
+	"log/slog"
+
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -20,7 +22,6 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slog"
 )
 
 type Server struct {
@@ -98,13 +99,13 @@ func (s *Server) Start(ctx context.Context) error {
 	// 关闭gin默认的校验
 	// 等待所有都读取完成后统一校验
 	binding.Validator = nil
-	slog.InfoCtx(ctx, "Starting HTTP server", slog.String("addr", s.opt.addr))
+	slog.InfoContext(ctx, "Starting HTTP server", slog.String("addr", s.opt.addr))
 	go s.httpsrv.Serve(l)
 	return nil
 }
 
 func (s *Server) Stop(ctx context.Context) error {
-	slog.InfoCtx(ctx, "Shutdown HTTP server", slog.String("addr", s.opt.addr))
+	slog.InfoContext(ctx, "Shutdown HTTP server", slog.String("addr", s.opt.addr))
 	return s.httpsrv.Shutdown(ctx)
 }
 
@@ -219,7 +220,7 @@ func handleWarpf(opt *option) Handler {
 	}
 }
 
-func middleware(service string, opts ...Option) gin.HandlerFunc {
+func middleware(service string) gin.HandlerFunc {
 	tracer := otel.GetTracerProvider().Tracer("github.com/parkingwang/igo/pkg/http/web")
 	txtpropagator := otel.GetTextMapPropagator()
 	return func(c *gin.Context) {

@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 
+	"log/slog"
+
 	"github.com/parkingwang/igo/internal/trace"
 	"github.com/parkingwang/igo/pkg/http/web"
 	"github.com/parkingwang/igo/pkg/http/web/oas"
@@ -12,7 +14,6 @@ import (
 	"github.com/parkingwang/igo/pkg/store/redis"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
-	"golang.org/x/exp/slog"
 
 	"go.opentelemetry.io/contrib/propagators/b3"
 	"go.opentelemetry.io/otel"

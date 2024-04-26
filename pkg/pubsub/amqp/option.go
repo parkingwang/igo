@@ -3,10 +3,11 @@ package amqp
 import (
 	"os"
 
+	"log/slog"
+
 	"github.com/rabbitmq/amqp091-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slog"
 )
 
 type Option func(*option)

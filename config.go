@@ -3,8 +3,9 @@ package igo
 import (
 	"os"
 
+	"log/slog"
+
 	"github.com/parkingwang/igo/internal/config"
-	"golang.org/x/exp/slog"
 )
 
 var defaultConfig config.Provider

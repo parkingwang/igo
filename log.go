@@ -4,8 +4,9 @@ import (
 	"context"
 	"io"
 
+	"log/slog"
+
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slog"
 )
 
 var LogPrivacyAttrKey = []string{

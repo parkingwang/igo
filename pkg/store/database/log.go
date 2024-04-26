@@ -4,7 +4,8 @@ import (
 	"context"
 	"time"
 
-	"golang.org/x/exp/slog"
+	"log/slog"
+
 	"gorm.io/gorm/logger"
 )
 
@@ -34,10 +35,10 @@ func (l *tracelogger) Trace(ctx context.Context, begin time.Time, fc func() (str
 	}
 	switch {
 	case err != nil && l.lvl >= logger.Error:
-		slog.ErrorCtx(ctx, "gorm.trace", append(logattr, slog.String("err", err.Error()))...)
+		slog.ErrorContext(ctx, "gorm.trace", append(logattr, slog.String("err", err.Error()))...)
 	case dur >= time.Millisecond*500 && l.lvl >= logger.Warn:
-		slog.WarnCtx(ctx, "gorm.trace slow sql", logattr...)
+		slog.WarnContext(ctx, "gorm.trace slow sql", logattr...)
 	case l.lvl == logger.Info:
-		slog.InfoCtx(ctx, "gorm.trace", logattr...)
+		slog.InfoContext(ctx, "gorm.trace", logattr...)
 	}
 }
