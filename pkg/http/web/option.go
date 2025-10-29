@@ -12,6 +12,7 @@ type option struct {
 	routes          Routes
 	docInfo         *oas.DocInfo
 	bind            *validator.Validate
+	pprof           bool
 }
 
 func defaultOption() *option {
@@ -22,6 +23,7 @@ func defaultOption() *option {
 		render: DefaultRender,
 		routes: make([]*routeInfo, 0),
 		bind:   v,
+		pprof:  true,
 	}
 }
 
@@ -50,5 +52,11 @@ func WithAddr(addr string) Option {
 func WithOpenAPI(info *oas.DocInfo) Option {
 	return func(o *option) {
 		o.docInfo = info
+	}
+}
+
+func WithPProf(o bool) Option {
+	return func(opt *option) {
+		opt.pprof = o
 	}
 }

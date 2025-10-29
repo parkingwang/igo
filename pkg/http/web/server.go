@@ -59,7 +59,9 @@ func New(opts ...Option) *Server {
 		}),
 	)
 
-	pprof.Register(e)
+	if opt.pprof {
+		pprof.Register(e)
+	}
 
 	return &Server{
 		opt: opt,
