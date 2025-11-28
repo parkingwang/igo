@@ -53,7 +53,7 @@ func New(opts ...Option) *Server {
 			opt.render(c, nil,
 				code.NewCodeError(
 					http.StatusInternalServerError,
-					http.StatusText(http.StatusInternalServerError),
+					"%s", http.StatusText(http.StatusInternalServerError),
 				),
 			)
 		}),
@@ -78,7 +78,7 @@ func (s *Server) Start(ctx context.Context) error {
 		if s.opt.docInfo != nil {
 			docspec, err := s.opt.routes.ToDoc(*s.opt.docInfo)
 			if err != nil {
-				slog.Error("build openapi3.0 failed", err)
+				slog.Error("build openapi3.0 failed", "err", err)
 			}
 			e := s.GinEngine()
 			e.GET("/debug/doc", func(ctx *gin.Context) {

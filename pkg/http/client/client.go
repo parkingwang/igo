@@ -7,18 +7,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/sony/gobreaker"
+	"github.com/sony/gobreaker/v2"
 )
 
 type Client struct {
 	opt Option
 	// 熔断器
-	breaker *gobreaker.CircuitBreaker
+	breaker *gobreaker.CircuitBreaker[*http.Response]
 }
 
 type Option struct {
@@ -49,7 +51,7 @@ func NewClient(opt Option) (*Client, error) {
 	}
 	client := &Client{opt: opt}
 	if opt.BreakerSetting != nil {
-		client.breaker = gobreaker.NewCircuitBreaker(*opt.BreakerSetting)
+		client.breaker = gobreaker.NewCircuitBreaker[*http.Response](*opt.BreakerSetting)
 	}
 	return client, nil
 }
@@ -70,24 +72,33 @@ func (c *Client) Do(r *http.Request, out any) error {
 	if c.opt.ModfityRequest != nil {
 		c.opt.ModfityRequest(r)
 	}
+	var err error
 	var response *http.Response
+	var start = time.Now()
 	if c.breaker != nil {
-		ret, err := c.breaker.Execute(func() (any, error) {
+		response, err = c.breaker.Execute(func() (*http.Response, error) {
 			return c.opt.Client.Do(r) // nolint
 		})
-		if err != nil {
-			return err
-		}
-		response = ret.(*http.Response)
 	} else {
-		var err error
 		response, err = c.opt.Client.Do(r) // nolint
-		if err != nil {
-			return err
-		}
 	}
-	defer response.Body.Close()
-	return c.opt.ParseResponse(response, out)
+	loglvl := slog.LevelInfo
+	logattrs := []slog.Attr{
+		slog.String("method", r.Method),
+		slog.String("url", r.URL.String()),
+		slog.Duration("latency", time.Since(start)),
+	}
+	if err == nil {
+		defer response.Body.Close()
+		err = c.opt.ParseResponse(response, out)
+		logattrs = append(logattrs, slog.Int("status", response.StatusCode))
+	}
+	if err != nil {
+		logattrs = append(logattrs, slog.Any("err", err))
+		loglvl = slog.LevelError
+	}
+	slog.LogAttrs(r.Context(), loglvl, "httpclt", logattrs...)
+	return err
 }
 
 func (c *Client) Get(url string, args ...any) Requester {
